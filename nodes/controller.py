@@ -11,8 +11,8 @@ from keras.models import load_model
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Imitation Learning Feed/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Imitation Learning Feed-23-03/'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -79,9 +79,10 @@ class Controller:
                         print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
-        camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2)
-        camera_image = camera_image/255.
-        camera_image = camera_image.reshape((1, 144, 256, 3))
+        camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
+        #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+        camera_image = np.float16(camera_image/255.)
+        camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
         
         predicted_actions = self.driving_model.predict(camera_image)
         action = np.argmax(predicted_actions)
@@ -96,6 +97,15 @@ class Controller:
             cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = -1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
+
+    def initialize_robot(self):
+        pass
+    
+    def pedestrian_crossing(self, camera_image):
+        pass
+    
+    def get_to_inner_loop(self, camera_image):
+        pass
 
 
         
