@@ -11,8 +11,8 @@ from keras.models import load_model
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Imitation Learning Feed-23-03/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass.h5'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Correction Feed/'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -85,12 +85,14 @@ class Controller:
         camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
         
         predicted_actions = self.driving_model.predict(camera_image)
+        print(predicted_actions)
         action = np.argmax(predicted_actions)
+        comparator = np.random.randint(10, )/10.
         cmd_vel_msg = Twist()
-        if (action == 0): #drive forward
+        if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
             cmd_vel_msg.linear.x = 0.3
             cmd_vel_msg.angular.z = 0
-        elif(action == 1): #turn left
+        elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
             cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = 1.
         else:
