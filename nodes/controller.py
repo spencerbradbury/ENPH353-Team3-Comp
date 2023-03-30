@@ -11,7 +11,7 @@ from keras.models import load_model
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Correction_into_in/'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V4.h5'
 ##
 # Class that will contain functions to control the robot
@@ -29,10 +29,25 @@ class Controller:
         self.xspeed = 0
         self.zang = 0
         self.record_count = 0
-        self.state = -1
+        self.state = -1 #for autopilot purposes
+        self.robot_state = 0
+        self.num_x_walks = 0
+        self.innit_frames = 0
         self.autopilot = False
         self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
     
+    def state_machine(self, camera_image):
+
+        # innitialize
+        if (self.robot_state == 0):
+            self.innitialize_robot()
+        #autopilot 1
+        if (self.robot_state == 1):
+            self.drive_with_autopilot(camera_image)
+        #x-walk stop
+        if (self.robot_state == 2):
+            self.pedestrian_crossing_stop()
+
     def image_callback(self, msg):
         try:
             # Convert the image message to a cv2 object
@@ -40,12 +55,7 @@ class Controller:
         except CvBridgeError as e:
             print(e)
 
-        if (self.isrecording == True):
-            self.record_frames_states(camera_image)
-        
-        if (self.autopilot == True):
-            self.drive_with_autopilot(camera_image)
-
+        self.state_machine(camera_image)
         cv2.imshow("Camera Feed", camera_image)
         cv2.waitKey(1)
 
@@ -79,6 +89,9 @@ class Controller:
                         print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
+        if (self.is_x_walk_in_front(camera_image)):
+            self.robot_state = 2
+
         camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
         #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
         camera_image = np.float16(camera_image/255.)
@@ -100,14 +113,46 @@ class Controller:
             cmd_vel_msg.angular.z = -1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
 
-    def initialize_robot(self):
-        pass
+    def innitialize_robot(self):
+        cmd_vel_msg = Twist()
+        cmd_vel_msg.linear.x = .5
+        cmd_vel_msg.angular.z = 1.
+        if(self.innit_frames > 20):
+            self.robot_state = 1 #transition to autopilot 1 state
+        self.innit_frames+=1
     
-    def pedestrian_crossing(self, camera_image):
-        pass
-    
-    def get_to_inner_loop(self, camera_image):
-        pass
+    def pedestrian_crossing_stop(self):
+        cmd_vel_msg = Twist()
+        cmd_vel_msg.linear.x = 0
+        cmd_vel_msg.angular.z = 0
+        self.cmd_vel_pub.publish(cmd_vel_msg)
+        print("stop for x-walk")
+        self.robot_state = 1 #change to wait for ped in the future
+
+    def is_x_walk_in_front (self, camera_image):
+        hsv = cv2.cvtColor(camera_image, cv2.COLOR_BGR2HSV)
+        lower_hsv = np.array([0,112,114])
+        upper_hsv = np.array([0,255,255])
+        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        threshold = 30
+        max_value = 255
+
+        _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
+        mask = cv2.GaussianBlur(mask,(3,3),cv2.BORDER_DEFAULT)
+
+        # Find the contours of the white shapes in the binary image
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            return False
+        # Find the largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        moments = cv2.moments(largest_contour)
+        centroid_y = int(moments["m01"] / moments["m00"])
+        bottom = int(camera_image.shape[0] / 8)
+        if (centroid_y > camera_image.shape[0] - bottom):
+            return True
+        return False 
+
 
 
         
