@@ -152,7 +152,29 @@ class Controller:
         if (centroid_y > camera_image.shape[0] - bottom):
             return True
         return False 
+    def is_ped_crossing(self, camera_image):
+          height, width = camera_image.shape[:2]
+        # Set the number of pixels to cut from each side
+        num_pixels = 500
 
+        # Cut the image by removing the specified number of pixels from each side
+        image = camera_image[:, num_pixels:width-num_pixels]
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_hsv = np.array([0,112,114])
+        upper_hsv = np.array([0,255,255])
+        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        threshold = 30
+        max_value = 255
+
+        _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
+        mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
+
+        # Find the contours of the white shapes in the binary image
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if (len(contours) > 2):
+            return True
+        return False
 
 
         
