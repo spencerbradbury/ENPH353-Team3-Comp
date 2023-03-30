@@ -8,6 +8,7 @@ import numpy as np
 import os
 import time
 from keras.models import load_model
+from std_msgs.msg import String
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
@@ -20,10 +21,15 @@ class Controller:
 
         self.bridge = CvBridge()
 
+
+        #Initialize time, used to stop clock in time trial
+        self.start_time = time.time()
+
         #define ros nodes
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
+        self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.xspeed = 0
@@ -32,6 +38,10 @@ class Controller:
         self.state = -1
         self.autopilot = False
         self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
+
+        #start timer
+        time.sleep(1)
+        self.license_plate_pub.publish(str('Team3,multi21,0,XR58'))
     
     def image_callback(self, msg):
         try:
@@ -48,6 +58,10 @@ class Controller:
 
         cv2.imshow("Camera Feed", camera_image)
         cv2.waitKey(1)
+
+        #Check to stop timer after 30 seconds
+        if (time.time() - self.start_time > 30 and time.time() - self.start_time < 31):
+            self.license_plate_pub.publish(str('Team3,multi21,-1,XR58'))
 
     def velocity_callback(self, msg):
         #press t to start/stop recording 
