@@ -111,10 +111,10 @@ class Controller:
             cmd_vel_msg.linear.x = 0.3
             cmd_vel_msg.angular.z = 0
         elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
-            cmd_vel_msg.linear.x = 0.01
+            cmd_vel_msg.linear.x = 0.02
             cmd_vel_msg.angular.z = 1.
         else:
-            cmd_vel_msg.linear.x = 0.01
+            cmd_vel_msg.linear.x = 0.02
             cmd_vel_msg.angular.z = -1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
 

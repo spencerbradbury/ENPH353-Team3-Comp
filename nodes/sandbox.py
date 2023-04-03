@@ -11,7 +11,7 @@ from keras.models import load_model
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Ped/'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/SFU 1st car/'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
 ##
 # Class that will contain functions to control the robot
@@ -65,11 +65,18 @@ class Controller:
 
     def record_frames_states(self, camera_image):
         if (self.record_count < 2000):
-            image_name = f"{time.time()}.jpg"
-            cv2.imwrite(os.path.join(IMITATION_PATH, image_name), camera_image)
-            self.record_count += 1
-            if (self.record_count % 100 == 0):
-                print(f"Recorded {self.record_count} frames")
+                if (self.xspeed != 0 or self.zang != 0):
+                    if (self.xspeed > 0): #forward
+                        self.state = 1
+                    elif (self.zang > 0): #turn left 
+                        self.state = 2
+                    else: #turn right
+                        self.state = 3
+                    image_name = f"{self.state}_{time.time()}.jpg"
+                    cv2.imwrite(os.path.join(IMITATION_PATH, image_name), camera_image)
+                    self.record_count += 1
+                    if (self.record_count % 100 == 0):
+                        print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
         camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
