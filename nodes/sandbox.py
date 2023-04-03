@@ -12,7 +12,7 @@ from keras.models import load_model
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Ped/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V4.h5'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:

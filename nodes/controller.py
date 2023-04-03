@@ -33,6 +33,8 @@ class Controller:
         self.robot_state = 0
         self.num_x_walks = 0
         self.innit_frames = 0
+        self.x_frames = 0
+        self.time_last_x_walk = 0
         self.autopilot = False
         self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
     
@@ -47,6 +49,9 @@ class Controller:
         #x-walk stop
         if (self.robot_state == 2):
             self.pedestrian_crossing_stop()
+        #wait for ped and cross the x-walk
+        if (self.robot_state == 3):
+            self.wait_for_ped(camera_image)
 
     def image_callback(self, msg):
         try:
@@ -89,7 +94,7 @@ class Controller:
                         print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
-        if (self.is_x_walk_in_front(camera_image)):
+        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
             self.robot_state = 2
 
         camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
@@ -115,9 +120,10 @@ class Controller:
 
     def innitialize_robot(self):
         cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = .5
+        cmd_vel_msg.linear.x = .3
         cmd_vel_msg.angular.z = 1.
-        if(self.innit_frames > 20):
+        self.cmd_vel_pub.publish(cmd_vel_msg)
+        if(self.innit_frames > 15):
             self.robot_state = 1 #transition to autopilot 1 state
         self.innit_frames+=1
     
@@ -127,8 +133,28 @@ class Controller:
         cmd_vel_msg.angular.z = 0
         self.cmd_vel_pub.publish(cmd_vel_msg)
         print("stop for x-walk")
-        self.robot_state = 1 #change to wait for ped in the future
+        self.time_last_x_walk = time.time()
+        self.robot_state = 3 #change to wait for ped in the future
 
+    def wait_for_ped(self, camera_image):
+        if(self.is_ped_crossing(camera_image)):
+            self.cross_x_walk()
+            
+            
+    def cross_x_walk(self):
+        increment = 0.2
+        #if (self.num_x_walks > 0):
+        #    increment = 0.7
+        curent_time = time.time()
+        end_time = curent_time + increment
+        while(curent_time < end_time):
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0.5
+            cmd_vel_msg.angular.z = 0
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            curent_time = time.time()
+        self.robot_state = 1
+        
     def is_x_walk_in_front (self, camera_image):
         hsv = cv2.cvtColor(camera_image, cv2.COLOR_BGR2HSV)
         lower_hsv = np.array([0,112,114])
@@ -148,17 +174,20 @@ class Controller:
         largest_contour = max(contours, key=cv2.contourArea)
         moments = cv2.moments(largest_contour)
         centroid_y = int(moments["m01"] / moments["m00"])
-        bottom = int(camera_image.shape[0] / 8)
-        if (centroid_y > camera_image.shape[0] - bottom):
+        bottom = int(camera_image.shape[0] / 9)
+        if (centroid_y > camera_image.shape[0] - bottom and len(contours) > 1):
+            self.num_x_walks+=1
             return True
         return False 
+        
     def is_ped_crossing(self, camera_image):
-          height, width = camera_image.shape[:2]
+        height, width = camera_image.shape[:2]
         # Set the number of pixels to cut from each side
-        num_pixels = 500
+        num_pixels_v = 500
+        num_pixels_h = 300
 
         # Cut the image by removing the specified number of pixels from each side
-        image = camera_image[:, num_pixels:width-num_pixels]
+        image = camera_image[0:height-num_pixels_h, num_pixels_v:width-num_pixels_v]
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         lower_hsv = np.array([0,112,114])
         upper_hsv = np.array([0,255,255])
@@ -172,7 +201,7 @@ class Controller:
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        if (len(contours) > 2):
+        if (len(contours) >= 2):
             return True
         return False
 
