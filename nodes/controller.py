@@ -12,7 +12,8 @@ from keras.models import load_model
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V4.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V4.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V6_40_01.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -36,7 +37,8 @@ class Controller:
         self.x_frames = 0
         self.time_last_x_walk = 0
         self.autopilot = False
-        self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
+        self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
+        self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
     
     def state_machine(self, camera_image):
 
@@ -44,7 +46,7 @@ class Controller:
         if (self.robot_state == 0):
             self.innitialize_robot()
         #autopilot 1
-        if (self.robot_state == 1):
+        if (self.robot_state == 1 or self.robot_state == 4):
             self.drive_with_autopilot(camera_image)
         #x-walk stop
         if (self.robot_state == 2):
@@ -96,27 +98,29 @@ class Controller:
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
             self.robot_state = 2
-
-        camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
-        #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
-        camera_image = np.float16(camera_image/255.)
-        camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
-        
-        predicted_actions = self.driving_model.predict(camera_image)
-        print(predicted_actions)
-        action = np.argmax(predicted_actions)
-        comparator = np.random.randint(10, )/10.
-        cmd_vel_msg = Twist()
-        if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
-            cmd_vel_msg.linear.x = 0.3
-            cmd_vel_msg.angular.z = 0
-        elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
-            cmd_vel_msg.linear.x = 0.02
-            cmd_vel_msg.angular.z = 1.
         else:
-            cmd_vel_msg.linear.x = 0.02
-            cmd_vel_msg.angular.z = -1.
-        self.cmd_vel_pub.publish(cmd_vel_msg)
+            camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
+            #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+            camera_image = np.float16(camera_image/255.)
+            camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
+            
+            if self.robot_state == 1:
+                predicted_actions = self.driving_model_1.predict(camera_image)
+            else: predicted_actions = self.driving_model_2.predict(camera_image)
+            #print(predicted_actions)
+            action = np.argmax(predicted_actions)
+            #comparator = np.random.randint(10, )/10.
+            cmd_vel_msg = Twist()
+            if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
+                cmd_vel_msg.linear.x = 0.3
+                cmd_vel_msg.angular.z = 0
+            elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
+                cmd_vel_msg.linear.x = 0.02
+                cmd_vel_msg.angular.z = 1.
+            else:
+                cmd_vel_msg.linear.x = 0.02
+                cmd_vel_msg.angular.z = -1.
+            self.cmd_vel_pub.publish(cmd_vel_msg)
 
     def innitialize_robot(self):
         cmd_vel_msg = Twist()
@@ -147,13 +151,15 @@ class Controller:
         #    increment = 0.7
         curent_time = time.time()
         end_time = curent_time + increment
-        while(curent_time < end_time):
-            cmd_vel_msg = Twist()
-            cmd_vel_msg.linear.x = 0.5
-            cmd_vel_msg.angular.z = 0
-            self.cmd_vel_pub.publish(cmd_vel_msg)
-            curent_time = time.time()
-        self.robot_state = 1
+        #while(curent_time < end_time):
+            # cmd_vel_msg = Twist()
+            # cmd_vel_msg.linear.x = 0.5
+            # cmd_vel_msg.angular.z = 0
+            # self.cmd_vel_pub.publish(cmd_vel_msg)
+            # curent_time = time.time()
+        if self.num_x_walks >= 2:
+            self.robot_state = 4
+        else: self.robot_state = 1
         
     def is_x_walk_in_front (self, camera_image):
         hsv = cv2.cvtColor(camera_image, cv2.COLOR_BGR2HSV)
