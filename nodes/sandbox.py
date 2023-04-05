@@ -11,8 +11,8 @@ from keras.models import load_model
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/SFU 1st car/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V6_40_01.h5'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/V2_More_Inner/'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V10_2_80_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -66,7 +66,7 @@ class Controller:
     def record_frames_states(self, camera_image):
         if (self.record_count < 2000):
                 if (self.xspeed != 0 or self.zang != 0):
-                    if (self.xspeed > 0): #forward
+                    if (self.xspeed > 0 and self.zang == 0): #forward
                         self.state = 1
                     elif (self.zang > 0): #turn left 
                         self.state = 2
@@ -79,10 +79,10 @@ class Controller:
                         print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
-        camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
+        camera_image = cv2.resize(camera_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
         #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
         camera_image = np.float16(camera_image/255.)
-        camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
+        camera_image = camera_image.reshape((1, 36, 64, 3)) # 1 for gay, 3 for bgr
         
         predicted_actions = self.driving_model.predict(camera_image)
         print(predicted_actions)
@@ -90,14 +90,14 @@ class Controller:
         comparator = np.random.randint(10, )/10.
         cmd_vel_msg = Twist()
         if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
-            cmd_vel_msg.linear.x = 0.3
+            cmd_vel_msg.linear.x = .3
             cmd_vel_msg.angular.z = 0
         elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
-            cmd_vel_msg.linear.x = 0.01
-            cmd_vel_msg.angular.z = 1.
+            cmd_vel_msg.linear.x = 0.3
+            cmd_vel_msg.angular.z = 2.2
         else:
-            cmd_vel_msg.linear.x = 0.01
-            cmd_vel_msg.angular.z = -1.
+            cmd_vel_msg.linear.x = .3
+            cmd_vel_msg.angular.z = -2.2
         self.cmd_vel_pub.publish(cmd_vel_msg)
 
     def initialize_robot(self):

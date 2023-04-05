@@ -12,8 +12,12 @@ from keras.models import load_model
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V4.h5'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_color_more_grass_correction_V6_40_01.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V10_1_80_01_smaller.h5'
+INPUT1 = [36, 64]
+F1 = 0.05
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V10_2_80_01_smaller.h5'
+INPUT2 = [36, 64]
+F2 = 0.05
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -99,27 +103,35 @@ class Controller:
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
             self.robot_state = 2
         else:
-            camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2) #if model uses grayscale
-            #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
-            camera_image = np.float16(camera_image/255.)
-            camera_image = camera_image.reshape((1, 144, 256, 3)) # 1 for gay, 3 for bgr
-            
+            if self.robot_state == 1:
+                camera_image = cv2.resize(camera_image, (0,0), fx=F1, fy=F1) #if model uses grayscale
+                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = np.float16(camera_image/255.)
+                camera_image = camera_image.reshape((1, INPUT1[0], INPUT1[1], 3)) # 1 for gay, 3 for bgr
+            else:
+                camera_image = cv2.resize(camera_image, (0,0), fx=F2, fy=F2) #if model uses grayscale
+                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = np.float16(camera_image/255.)
+                camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
             if self.robot_state == 1:
                 predicted_actions = self.driving_model_1.predict(camera_image)
-            else: predicted_actions = self.driving_model_2.predict(camera_image)
+                linear_x = 0.3
+            else: 
+                predicted_actions = self.driving_model_2.predict(camera_image)
+                linear_x = 0.3
             #print(predicted_actions)
             action = np.argmax(predicted_actions)
             #comparator = np.random.randint(10, )/10.
             cmd_vel_msg = Twist()
             if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
-                cmd_vel_msg.linear.x = 0.3
+                cmd_vel_msg.linear.x = linear_x
                 cmd_vel_msg.angular.z = 0
-            elif(action == 1): #turn left comparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
-                cmd_vel_msg.linear.x = 0.02
-                cmd_vel_msg.angular.z = 1.
+            elif(action == 1): #turn left cokmparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
+                cmd_vel_msg.linear.x = linear_x
+                cmd_vel_msg.angular.z = 2.2
             else:
-                cmd_vel_msg.linear.x = 0.02
-                cmd_vel_msg.angular.z = -1.
+                cmd_vel_msg.linear.x = linear_x
+                cmd_vel_msg.angular.z = -2.2
             self.cmd_vel_pub.publish(cmd_vel_msg)
 
     def innitialize_robot(self):
