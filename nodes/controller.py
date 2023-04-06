@@ -40,6 +40,7 @@ class Controller:
         self.innit_frames = 0
         self.x_frames = 0
         self.time_last_x_walk = 0
+        self.last_frame = np.zeros((1280, 720)) 
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
@@ -59,7 +60,7 @@ class Controller:
         if (self.robot_state == 3):
             self.wait_for_ped(camera_image)
         if (self.robot_state == 5):
-            pass
+            self.wait_for_truck(camera_image)
 
     def image_callback(self, msg):
         try:
@@ -246,9 +247,17 @@ class Controller:
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
             print("stop for truck")
+            self.last_frame = camera_image
             return True
         else: return False
-                
+    
+    def wait_for_truck(self, camera_image):
+        last_gray = cv2.cvtColor(self.last_frame, cv.COLOR_BGR2GRAY)
+        current_gray = cv2.cvtColor(camera_image, cv.COLOR_BGR2GRAY)
+        diff_img = cv2.absdiff(last_gray, current_gray)
+        difference = diff_img.sum()
+        print (difference)
+
                 
 
 if __name__ =='__main__':
