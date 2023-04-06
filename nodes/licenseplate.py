@@ -68,7 +68,8 @@ class PlateDetector:
             contour1 = contours[0]
             (x, y, w, h) = cv.boundingRect(contour1)
             cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cropped = image[y-50:y+int(h*1.1), x-10:x+int(w*1.1)]
+            # cropped = image[y-50:y+int(h*1.1), x-10:x+int(w*1.1)]
+            cropped = image[y:y+h, x:x+w]
             cv.imshow("cropped", cropped)
             print(f"Bounding Box Size: {w}x{h}")
             print(f"Cropped Image Size: {cropped.shape[0]}x{cropped.shape[1]}")
