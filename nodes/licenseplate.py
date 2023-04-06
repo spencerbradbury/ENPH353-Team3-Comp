@@ -66,16 +66,17 @@ class PlateDetector:
             (x1, y1, w1, h1) = cv.boundingRect(contour1)
             (x2, y2, w2, h2) = cv.boundingRect(contour2)
             if (abs(y1-y2) < 15):
-                conts = np.concatenate((contour1, contour2), axis=0)
+                plate = np.concatenate((contour1, contour2), axis=0)
                 #find center of conts
-                M = cv.moments(conts)
+                M = cv.moments(plate)
                 if M["m00"] != 0:
                     platecX = int(M["m10"] / M["m00"])
                     platecY = int(M["m01"] / M["m00"])
                 else:
                     platecX, platecY = 0, 0
-                (x, y, w, h) = cv.boundingRect(conts)
+                (x, y, w, h) = cv.boundingRect(plate)
             else:
+                plate = contour1
                 (x, y, w, h) = cv.boundingRect(contour1)
                 M = cv.moments(contour1)
                 if M["m00"] != 0:
@@ -83,56 +84,81 @@ class PlateDetector:
                     platecY = int(M["m01"] / M["m00"])
                 else:
                     platecX, platecY = 0, 0
-            cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            print(f"Bounding Box Size: {w}x{h}")
+            # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # print(f"Bounding Box Size: {w}x{h}")
 
         elif len(contours) == 1:
             contour1 = contours[0]
+            plate = contour1
             (x, y, w, h) = cv.boundingRect(contour1)
-            cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             M = cv.moments(contour1)
             if M["m00"] != 0:
                 platecX = int(M["m10"] / M["m00"])
                 platecY = int(M["m01"] / M["m00"])
             else:
                 platecX, platecY = 0, 0
-            print(f"Bounding Box Size: {w}x{h}")
+            # print(f"Bounding Box Size: {w}x{h}")
         else:
-            print("No contours found")
+            # print("No contours found")
             platecX, platecY = 0, 0
 
             
         line_mask = cv.inRange(hsv, self.line_lower_hsv, self.line_upper_hsv)
-        #make the line mask all 0s 
-        cv.morphologyEx(line_mask, cv.MORPH_DILATE, (5,5), line_mask, iterations=5)
-        cv.imshow("line mask", line_mask)
+        #make the line mask all 0s in the upper half of the image
+        line_mask[0:10*720//17,:] = 0
+        blurred_line = cv.GaussianBlur(line_mask, (41, 41), 0)
+        # cv.imshow("blurred line", blurred_line)
+        thresh_line = cv.threshold(blurred_line, 1, 255, cv.THRESH_BINARY)[1]
+        cv.imshow("thresh line", thresh_line)
+        line_mask = thresh_line.copy()
+        # cv.morphologyEx(line_mask, cv.MORPH_DILATE, (21,21), line_mask, iterations=10)
+        # cv.imshow("line mask", line_mask)
         line_mask = cv.bitwise_not(line_mask)
-        blur = cv.GaussianBlur(hsv, (3, 3), 0)
+        blur = cv.GaussianBlur(hsv, (1, 1), 0)
         mask2 = cv.inRange(blur, self.lower_hsv2, self.upper_hsv2)
-        cv.imshow("mask2", mask2)
+        # cv.imshow("mask2", mask2)
         mask2 = cv.bitwise_and(mask2, line_mask)
-        cv.imshow("Combined Mask", mask2)
+        # cv.imshow("Combined Mask", mask2)
         cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
         cv.morphologyEx(mask2, cv.MORPH_CLOSE, (5,5), mask2, iterations=2)
-        cv.imshow("processed", mask2)
+        # cv.imshow("processed", mask2)
         contours2, _ = cv.findContours(mask2.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours2 = sorted(contours2, key=cv.contourArea, reverse=True)
         
-        #Draw 2 largest contours in red and the rest in blue
-        for i in range(min(len(contours2), 10)):
-            #find the distance between the center of the plate and the center of the contour
-            M = cv.moments(contours2[i])
-            if M["m00"] != 0:
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
-            else:
-                cX, cY = image.shape[1], image.shape[0]
-            dist = math.sqrt((platecX - cX)**2 + (platecY - cY)**2)
+        try:
+            car = plate
+            for i in range(min(len(contours2), 5)):
+                #find the distance between the center of the plate and the center of the contour
+                #pass if contour does not have a size between 100 and 1000
+                if cv.contourArea(contours2[i]) < 200 or cv.contourArea(contours2[i]) > 10000000:
+                    continue
 
-            if dist < 120:
-                cv.drawContours(image, contours2, i, (0, 0, 255), 2)
-            else:
-                cv.drawContours(image, contours2, i, (255, 0, 0), 2)
+
+                M = cv.moments(contours2[i])
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
+                else:
+                    cX, cY = image.shape[1], image.shape[0]
+                xdist = abs(platecX - cX)
+                ydist = abs(platecY - cY)
+
+                if ydist < 150 and xdist < 50:
+                    # cv.drawContours(image, contours2, i, (0, 0, 255), 2)
+                    car = np.concatenate((car, contours2[i]), axis=0)
+                else:
+                    # cv.drawContours(image, contours2, i, (255, 0, 0), 2)
+                    pass
+
+            if car.size != 0:
+                (x, y, w, h) = cv.boundingRect(car)
+                # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                crop = image[y:y+h, x:x+w]
+                cv.imshow("crop", crop)
+        except UnboundLocalError as e:
+            print("No plate found")
+
 
         cv.imshow("main", image)
         cv.waitKey(1)
