@@ -13,6 +13,7 @@ from std_msgs.msg import String
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Imitation Learning Feed/'
+MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
 ##
 # Class that will contain functions to control the robot
@@ -30,11 +31,13 @@ class Controller:
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
+        self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
         #set initial fields for robot velocity, 
         self.isrecording = False 
+        self.recording_count = -1
+        self.frame_count = 0
         self.xspeed = 0
         self.zang = 0
-        self.record_count = 0
         self.state = -1
         self.autopilot = False
         self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
@@ -50,14 +53,17 @@ class Controller:
         except CvBridgeError as e:
             print(e)
 
-        if (self.isrecording == True):
+        self.plate_detection_pub.publish(msg)
+
+        if (self.isrecording == True and self.frame_count % 20 == 0):
             self.record_frames_states(camera_image)
         
         if (self.autopilot == True):
             self.drive_with_autopilot(camera_image)
 
-        cv2.imshow("Camera Feed", camera_image)
-        cv2.waitKey(1)
+        self.frame_count += 1
+        # cv2.imshow("Camera Feed", camera_image)
+        # cv2.waitKey(1)
 
         #Check to stop timer after 30 seconds
         if (time.time() - self.start_time > 30 and time.time() - self.start_time < 31):
@@ -66,7 +72,11 @@ class Controller:
     def velocity_callback(self, msg):
         #press t to start/stop recording 
         if (msg.linear.z > 0):
-            self.isrecording = not self.isrecording
+            self.recording_count += 1
+            if (self.recording_count % 2 == 0):
+                self.isrecording = True
+            else:
+                self.isrecording = False
             print("Recording {}".format(self.isrecording))
         
         #press b to start/stop autopilot
@@ -78,19 +88,9 @@ class Controller:
         self.zang = msg.angular.z
 
     def record_frames_states(self, camera_image):
-        if (self.record_count < 2000):
-                if (self.xspeed != 0 or self.zang != 0):
-                    if (self.xspeed > 0): #forward
-                        self.state = 1
-                    elif (self.zang > 0): #turn left 
-                        self.state = 2
-                    else: #turn right
-                        self.state = 3
-                    image_name = f"{self.state}_{time.time()}.jpg"
-                    cv2.imwrite(os.path.join(IMITATION_PATH, image_name), camera_image)
-                    self.record_count += 1
-                    if (self.record_count % 100 == 0):
-                        print(f"Recorded {self.record_count} frames")
+        image_name = f"Plate_{(self.recording_count/2)+1}_{time.time()}.jpg"
+        cv2.imwrite(os.path.join(MASKING_PATH, image_name), camera_image)
+        print("Recording frame {}".format(image_name))
 
     def drive_with_autopilot(self, camera_image):
         camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2)
