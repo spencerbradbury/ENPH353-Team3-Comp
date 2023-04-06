@@ -12,9 +12,14 @@ from std_msgs.msg import String
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Imitation Learning Feed/'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V12_1_80_01_smaller.h5'
+INPUT1 = [36, 64]
+F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
+INPUT2 = [36, 64]
+F2 = 0.05
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -38,36 +43,45 @@ class Controller:
         self.frame_count = 0
         self.xspeed = 0
         self.zang = 0
-        self.state = -1
+        self.record_count = 0
+        self.state = -1 #for autopilot purposes
+        self.robot_state = 0
+        self.num_x_walks = 0
+        self.innit_frames = 0
+        self.x_frames = 0
+        self.time_last_x_walk = 0
         self.autopilot = False
-        self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
-
-        #start timer
-        time.sleep(1)
-        self.license_plate_pub.publish(str('Team3,multi21,0,XR58'))
+        self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
+        self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
     
+    def state_machine(self, camera_image):
+
+        # innitialize
+        if (self.robot_state == 0):
+            self.innitialize_robot()
+        #autopilot 1
+        if (self.robot_state == 1 or self.robot_state == 4):
+            self.drive_with_autopilot(camera_image)
+        #x-walk stop
+        if (self.robot_state == 2):
+            self.pedestrian_crossing_stop()
+        #wait for ped and cross the x-walk
+        if (self.robot_state == 3):
+            self.wait_for_ped(camera_image)
+        if (self.robot_state == 5):
+            pass
+
     def image_callback(self, msg):
         try:
             # Convert the image message to a cv2 object
             camera_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             print(e)
-
+            
         self.plate_detection_pub.publish(msg)
-
-        if (self.isrecording == True and self.frame_count % 20 == 0):
-            self.record_frames_states(camera_image)
-        
-        if (self.autopilot == True):
-            self.drive_with_autopilot(camera_image)
-
-        self.frame_count += 1
+        self.state_machine(camera_image)
         # cv2.imshow("Camera Feed", camera_image)
         # cv2.waitKey(1)
-
-        #Check to stop timer after 30 seconds
-        if (time.time() - self.start_time > 30 and time.time() - self.start_time < 31):
-            self.license_plate_pub.publish(str('Team3,multi21,-1,XR58'))
 
     def velocity_callback(self, msg):
         #press t to start/stop recording 
@@ -93,26 +107,153 @@ class Controller:
         print("Recording frame {}".format(image_name))
 
     def drive_with_autopilot(self, camera_image):
-        camera_image = cv2.resize(camera_image, (0,0), fx=0.2, fy=0.2)
-        camera_image = camera_image/255.
-        camera_image = camera_image.reshape((1, 144, 256, 3))
-        
-        predicted_actions = self.driving_model.predict(camera_image)
-        action = np.argmax(predicted_actions)
-        cmd_vel_msg = Twist()
-        if (action == 0): #drive forward
-            cmd_vel_msg.linear.x = 0.3
-            cmd_vel_msg.angular.z = 0
-        elif(action == 1): #turn left
-            cmd_vel_msg.linear.x = 0
-            cmd_vel_msg.angular.z = 1.
+        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
+            self.robot_state = 2
+        elif (self.robot_state == 4 and self.has_entered_inner_loop(camera_image)):
+            self.robot_state = 5
         else:
-            cmd_vel_msg.linear.x = 0
-            cmd_vel_msg.angular.z = -1.
+            if self.robot_state == 1:
+                camera_image = cv2.resize(camera_image, (0,0), fx=F1, fy=F1) #if model uses grayscale
+                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = np.float16(camera_image/255.)
+                camera_image = camera_image.reshape((1, INPUT1[0], INPUT1[1], 3)) # 1 for gay, 3 for bgr
+            else:
+                camera_image = cv2.resize(camera_image, (0,0), fx=F2, fy=F2) #if model uses grayscale
+                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = np.float16(camera_image/255.)
+                camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
+            if self.robot_state == 1:
+                predicted_actions = self.driving_model_1.predict(camera_image)
+                linear_x = 0.3
+            else: 
+                predicted_actions = self.driving_model_2.predict(camera_image)
+                linear_x = 0.3
+            #print(predicted_actions)
+            action = np.argmax(predicted_actions)
+            #comparator = np.random.randint(10, )/10.
+            cmd_vel_msg = Twist()
+            if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
+                cmd_vel_msg.linear.x = linear_x
+                cmd_vel_msg.angular.z = 0
+            elif(action == 1): #turn left cokmparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
+                cmd_vel_msg.linear.x = linear_x
+                cmd_vel_msg.angular.z = 2.2
+            else:
+                cmd_vel_msg.linear.x = linear_x
+                cmd_vel_msg.angular.z = -2.2
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+
+    def innitialize_robot(self):
+        cmd_vel_msg = Twist()
+        cmd_vel_msg.linear.x = .3
+        cmd_vel_msg.angular.z = 1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
+        if(self.innit_frames > 15):
+            self.robot_state = 1 #transition to autopilot 1 state
+        self.innit_frames+=1
+    
+    def pedestrian_crossing_stop(self):
+        cmd_vel_msg = Twist()
+        cmd_vel_msg.linear.x = 0
+        cmd_vel_msg.angular.z = 0
+        self.cmd_vel_pub.publish(cmd_vel_msg)
+        print("stop for x-walk")
+        self.time_last_x_walk = time.time()
+        self.robot_state = 3 #change to wait for ped in the future
 
-
+    def wait_for_ped(self, camera_image):
+        if(self.is_ped_crossing(camera_image)):
+            self.cross_x_walk()
+            
+            
+    def cross_x_walk(self):
+        increment = 0.2
+        #if (self.num_x_walks > 0):
+        #    increment = 0.7
+        curent_time = time.time()
+        end_time = curent_time + increment
+        #while(curent_time < end_time):
+            # cmd_vel_msg = Twist()
+            # cmd_vel_msg.linear.x = 0.5
+            # cmd_vel_msg.angular.z = 0
+            # self.cmd_vel_pub.publish(cmd_vel_msg)
+            # curent_time = time.time()
+        if self.num_x_walks >= 2:
+            self.robot_state = 4
+        else: self.robot_state = 1
         
+    def is_x_walk_in_front (self, camera_image):
+        hsv = cv2.cvtColor(camera_image, cv2.COLOR_BGR2HSV)
+        lower_hsv = np.array([0,112,114])
+        upper_hsv = np.array([0,255,255])
+        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        threshold = 30
+        max_value = 255
+
+        _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
+        mask = cv2.GaussianBlur(mask,(3,3),cv2.BORDER_DEFAULT)
+
+        # Find the contours of the white shapes in the binary image
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            return False
+        # Find the largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        moments = cv2.moments(largest_contour)
+        centroid_y = int(moments["m01"] / moments["m00"])
+        bottom = int(camera_image.shape[0] / 9)
+        if (centroid_y > camera_image.shape[0] - bottom and len(contours) > 1):
+            self.num_x_walks+=1
+            return True
+        return False 
+        
+    def is_ped_crossing(self, camera_image):
+        height, width = camera_image.shape[:2]
+        # Set the number of pixels to cut from each side
+        num_pixels_v = 500
+        num_pixels_h = 300
+
+        # Cut the image by removing the specified number of pixels from each side
+        image = camera_image[0:height-num_pixels_h, num_pixels_v:width-num_pixels_v]
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_hsv = np.array([0,112,114])
+        upper_hsv = np.array([0,255,255])
+        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        threshold = 30
+        max_value = 255
+
+        _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
+        mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
+
+        # Find the contours of the white shapes in the binary image
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if (len(contours) >= 2):
+            return True
+        return False
+
+    def has_entered_inner_loop(self, camera_image):
+        threshold = 90
+        height, width = camera_image.shape[:2]
+        num_pixels_top = 450
+        num_pixels_bot = 220
+        num_pixels_l = 500
+        num_pixels_r = 150
+        gray = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
+        _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+        binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
+        cv2.imshow("Camera Feed", binary)
+        cv2.waitKey(1)
+        if (np.sum(binary) == 0):
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0
+            cmd_vel_msg.angular.z = 0
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            print("stop for truck")
+            return True
+        else: return False
+                
                 
 
 if __name__ =='__main__':
