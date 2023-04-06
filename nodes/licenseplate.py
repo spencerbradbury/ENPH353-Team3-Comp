@@ -9,6 +9,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import os
 from keras.models import load_model
 from std_msgs.msg import String
+import math
 
 # CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/character_model.h5'
 
@@ -28,6 +29,18 @@ class PlateDetector:
         self.lower_hsv = np.array([self.lh,self.ls,self.lv])
         self.upper_hsv = np.array([self.uh,self.us,self.uv])
 
+        self.uh2 = 60
+        self.us2 = 8
+        self.uv2 = 203
+        self.lh2 = 0
+        self.ls2 = 0
+        self.lv2 = 90
+        self.lower_hsv2 = np.array([self.lh2,self.ls2,self.lv2])
+        self.upper_hsv2 = np.array([self.uh2,self.us2,self.uv2])
+
+        self.line_lower_hsv = np.array([0,0,208])
+        self.line_upper_hsv = np.array([255,255,255])
+
     def image_callback(self,msg):
         try:
             # Convert your ROS Image message to OpenCV2
@@ -40,7 +53,6 @@ class PlateDetector:
 
         # Threshold the HSV image to get only blue colors
         mask = cv.inRange(hsv, self.lower_hsv, self.upper_hsv)
-
         blurred = cv.GaussianBlur(mask, (31, 31), 0)
         thresh = cv.threshold(blurred, self.thresh, 255, cv.THRESH_BINARY)[1]
 
@@ -55,27 +67,73 @@ class PlateDetector:
             (x2, y2, w2, h2) = cv.boundingRect(contour2)
             if (abs(y1-y2) < 15):
                 conts = np.concatenate((contour1, contour2), axis=0)
+                #find center of conts
+                M = cv.moments(conts)
+                if M["m00"] != 0:
+                    platecX = int(M["m10"] / M["m00"])
+                    platecY = int(M["m01"] / M["m00"])
+                else:
+                    platecX, platecY = 0, 0
                 (x, y, w, h) = cv.boundingRect(conts)
             else:
                 (x, y, w, h) = cv.boundingRect(contour1)
+                M = cv.moments(contour1)
+                if M["m00"] != 0:
+                    platecX = int(M["m10"] / M["m00"])
+                    platecY = int(M["m01"] / M["m00"])
+                else:
+                    platecX, platecY = 0, 0
             cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # cropped = image[y-50:y+int(h*1.1), x-10:x+int(w*1.1)]
-            cropped = image[y:y+h, x:x+w]
-            cv.imshow("cropped", cropped)
             print(f"Bounding Box Size: {w}x{h}")
-            print(f"Cropped Image Size: {cropped.shape[0]}x{cropped.shape[1]}")
 
         elif len(contours) == 1:
             contour1 = contours[0]
             (x, y, w, h) = cv.boundingRect(contour1)
             cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # cropped = image[y-50:y+int(h*1.1), x-10:x+int(w*1.1)]
-            cropped = image[y:y+h, x:x+w]
-            cv.imshow("cropped", cropped)
+            M = cv.moments(contour1)
+            if M["m00"] != 0:
+                platecX = int(M["m10"] / M["m00"])
+                platecY = int(M["m01"] / M["m00"])
+            else:
+                platecX, platecY = 0, 0
             print(f"Bounding Box Size: {w}x{h}")
-            print(f"Cropped Image Size: {cropped.shape[0]}x{cropped.shape[1]}")
+        else:
+            print("No contours found")
+            platecX, platecY = 0, 0
 
             
+        line_mask = cv.inRange(hsv, self.line_lower_hsv, self.line_upper_hsv)
+        #make the line mask all 0s 
+        cv.morphologyEx(line_mask, cv.MORPH_DILATE, (5,5), line_mask, iterations=5)
+        cv.imshow("line mask", line_mask)
+        line_mask = cv.bitwise_not(line_mask)
+        blur = cv.GaussianBlur(hsv, (3, 3), 0)
+        mask2 = cv.inRange(blur, self.lower_hsv2, self.upper_hsv2)
+        cv.imshow("mask2", mask2)
+        mask2 = cv.bitwise_and(mask2, line_mask)
+        cv.imshow("Combined Mask", mask2)
+        cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
+        cv.morphologyEx(mask2, cv.MORPH_CLOSE, (5,5), mask2, iterations=2)
+        cv.imshow("processed", mask2)
+        contours2, _ = cv.findContours(mask2.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        contours2 = sorted(contours2, key=cv.contourArea, reverse=True)
+        
+        #Draw 2 largest contours in red and the rest in blue
+        for i in range(min(len(contours2), 10)):
+            #find the distance between the center of the plate and the center of the contour
+            M = cv.moments(contours2[i])
+            if M["m00"] != 0:
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+            else:
+                cX, cY = image.shape[1], image.shape[0]
+            dist = math.sqrt((platecX - cX)**2 + (platecY - cY)**2)
+
+            if dist < 120:
+                cv.drawContours(image, contours2, i, (0, 0, 255), 2)
+            else:
+                cv.drawContours(image, contours2, i, (255, 0, 0), 2)
+
         cv.imshow("main", image)
         cv.waitKey(1)
 

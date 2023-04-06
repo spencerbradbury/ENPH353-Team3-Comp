@@ -4,7 +4,7 @@ import numpy as np
 import cv2 as cv
 import time
 
-kernel = (31,31)
+kernel = (5,5)
 
 top = cv.GaussianBlur(cv.resize(cv.imread('../media/masking/Plate_1.jpg',cv.IMREAD_COLOR), (480, 270)), kernel, 0)
 for i in range(2,5):
@@ -23,12 +23,12 @@ cv.imshow('Regular Images', img)
 # Convert BGR to HSV
 hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 
-uh = 130
-us = 255
-uv = 255
-lh = 110
-ls = 50
-lv = 50
+uh = 60
+us = 8
+uv = 203
+lh = 0
+ls = 0
+lv = 90
 lower_hsv = np.array([lh,ls,lv])
 upper_hsv = np.array([uh,us,uv])
 
