@@ -40,6 +40,8 @@ class Controller:
         self.innit_frames = 0
         self.x_frames = 0
         self.time_last_x_walk = 0
+        self.truck_passing = 0
+        self.is_inside = False
         self.last_frame = np.zeros((1280, 720)) 
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
@@ -105,7 +107,7 @@ class Controller:
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
             self.robot_state = 2
-        elif (self.robot_state == 4 and self.has_entered_inner_loop(camera_image)):
+        elif (self.robot_state == 4 and not self.is_inside and self.has_entered_inner_loop(camera_image)):
             self.robot_state = 5
         else:
             if self.robot_state == 1:
@@ -247,18 +249,48 @@ class Controller:
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
             print("stop for truck")
+            # increment = 0.1
+            # curent_time = time.time()
+            # end_time = curent_time + increment
+            # while(curent_time < end_time):
+            #     curent_time = time.time()
             self.last_frame = camera_image
+            self.is_inside = True
             return True
         else: return False
     
     def wait_for_truck(self, camera_image):
-        last_gray = cv2.cvtColor(self.last_frame, cv.COLOR_BGR2GRAY)
-        current_gray = cv2.cvtColor(camera_image, cv.COLOR_BGR2GRAY)
+        last_gray = cv2.cvtColor(self.last_frame, cv2.COLOR_BGR2GRAY)/255.
+        current_gray = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)/255.
         diff_img = cv2.absdiff(last_gray, current_gray)
         difference = diff_img.sum()
-        print (difference)
-
-                
+        print(difference)
+        if difference >= 10_000 or difference <= 7_500:
+            if(self.truck_passing > 4):
+                print('truck passed')
+                self.robot_state = 4
+                if difference >= 10_000:
+                    increment = 2
+                    curent_time = time.time()
+                    end_time = curent_time + increment
+                    while(curent_time < end_time):
+                        curent_time = time.time()
+            self.truck_passing+=1
+        self.last_frame = camera_image
+    
+    # def get_image_to_compare(self, camera_image):
+    #     threshold = 60
+    #     height, width = image.shape[:2]
+    #     num_pixels_top = 350
+    #     num_pixels_bot = 200
+    #     num_pixels_l = 500
+    #     num_pixels_r = 350
+    #     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    #     gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
+    #     _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+    #     binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
+    #     return binary
+                        
 
 if __name__ =='__main__':
     rospy.init_node('camera_velocity_nodes')
