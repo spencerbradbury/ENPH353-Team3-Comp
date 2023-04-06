@@ -12,10 +12,10 @@ from keras.models import load_model
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V10_1_80_01_smaller.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V12_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V10_2_80_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
 ##
@@ -58,6 +58,8 @@ class Controller:
         #wait for ped and cross the x-walk
         if (self.robot_state == 3):
             self.wait_for_ped(camera_image)
+        if (self.robot_state == 5):
+            pass
 
     def image_callback(self, msg):
         try:
@@ -67,8 +69,8 @@ class Controller:
             print(e)
 
         self.state_machine(camera_image)
-        cv2.imshow("Camera Feed", camera_image)
-        cv2.waitKey(1)
+        # cv2.imshow("Camera Feed", camera_image)
+        # cv2.waitKey(1)
 
     def velocity_callback(self, msg):
         #press t to start/stop recording 
@@ -102,6 +104,8 @@ class Controller:
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
             self.robot_state = 2
+        elif (self.robot_state == 4 and self.has_entered_inner_loop(camera_image)):
+            self.robot_state = 5
         else:
             if self.robot_state == 1:
                 camera_image = cv2.resize(camera_image, (0,0), fx=F1, fy=F1) #if model uses grayscale
@@ -223,8 +227,28 @@ class Controller:
             return True
         return False
 
-
-        
+    def has_entered_inner_loop(self, camera_image):
+        threshold = 90
+        height, width = camera_image.shape[:2]
+        num_pixels_top = 450
+        num_pixels_bot = 220
+        num_pixels_l = 500
+        num_pixels_r = 150
+        gray = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
+        _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+        binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
+        cv2.imshow("Camera Feed", binary)
+        cv2.waitKey(1)
+        if (np.sum(binary) == 0):
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0
+            cmd_vel_msg.angular.z = 0
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            print("stop for truck")
+            return True
+        else: return False
+                
                 
 
 if __name__ =='__main__':
