@@ -72,8 +72,8 @@ class Controller:
             print(e)
 
         self.state_machine(camera_image)
-        # cv2.imshow("Camera Feed", camera_image)
-        # cv2.waitKey(1)
+        cv2.imshow("Camera Feed", camera_image)
+        cv2.waitKey(1)
 
     def velocity_callback(self, msg):
         #press t to start/stop recording 
@@ -105,37 +105,33 @@ class Controller:
                         print(f"Recorded {self.record_count} frames")
 
     def drive_with_autopilot(self, camera_image):
-        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 5):
+        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 7):
             self.robot_state = 2
         elif (self.robot_state == 4 and not self.is_inside and self.has_entered_inner_loop(camera_image)):
             self.robot_state = 5
         else:
             if self.robot_state == 1:
-                camera_image = cv2.resize(camera_image, (0,0), fx=F1, fy=F1) #if model uses grayscale
-                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = cv2.resize(camera_image, (0,0), fx=F1, fy=F1) 
                 camera_image = np.float16(camera_image/255.)
-                camera_image = camera_image.reshape((1, INPUT1[0], INPUT1[1], 3)) # 1 for gay, 3 for bgr
+                camera_image = camera_image.reshape((1, INPUT1[0], INPUT1[1], 3))
             else:
-                camera_image = cv2.resize(camera_image, (0,0), fx=F2, fy=F2) #if model uses grayscale
-                #camera_image = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
+                camera_image = cv2.resize(camera_image, (0,0), fx=F2, fy=F2) 
                 camera_image = np.float16(camera_image/255.)
                 camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
             if self.robot_state == 1:
                 predicted_actions = self.driving_model_1.predict(camera_image)
-                linear_x = 0.3
+                linear_x = 0.3 #0.3
             else: 
                 predicted_actions = self.driving_model_2.predict(camera_image)
-                linear_x = 0.3
-            #print(predicted_actions)
+                linear_x = 0.3 #0.3
             action = np.argmax(predicted_actions)
-            #comparator = np.random.randint(10, )/10.
             cmd_vel_msg = Twist()
-            if (action == 0): #drive forwardcomparator < predicted_actions[0][0]
+            if (action == 0): #drive forward
                 cmd_vel_msg.linear.x = linear_x
                 cmd_vel_msg.angular.z = 0
-            elif(action == 1): #turn left cokmparator > predicted_actions[0][0] and comparator < predicted_actions[0][0]+predicted_actions[0][1]
+            elif(action == 1): #turn left 
                 cmd_vel_msg.linear.x = linear_x
-                cmd_vel_msg.angular.z = 2.2
+                cmd_vel_msg.angular.z = 2.2 #2.2
             else:
                 cmd_vel_msg.linear.x = linear_x
                 cmd_vel_msg.angular.z = -2.2
@@ -165,17 +161,6 @@ class Controller:
             
             
     def cross_x_walk(self):
-        increment = 0.2
-        #if (self.num_x_walks > 0):
-        #    increment = 0.7
-        curent_time = time.time()
-        end_time = curent_time + increment
-        #while(curent_time < end_time):
-            # cmd_vel_msg = Twist()
-            # cmd_vel_msg.linear.x = 0.5
-            # cmd_vel_msg.angular.z = 0
-            # self.cmd_vel_pub.publish(cmd_vel_msg)
-            # curent_time = time.time()
         if self.num_x_walks >= 2:
             self.robot_state = 4
         else: self.robot_state = 1
@@ -189,20 +174,22 @@ class Controller:
         max_value = 255
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
-        mask = cv2.GaussianBlur(mask,(3,3),cv2.BORDER_DEFAULT)
-
+        mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
+        cv2.imshow("mask", mask)
+        cv2.waitKey(1)
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) == 0:
             return False
         # Find the largest contour
-        largest_contour = max(contours, key=cv2.contourArea)
-        moments = cv2.moments(largest_contour)
-        centroid_y = int(moments["m01"] / moments["m00"])
+        #largest_contour = max(contours, key=cv2.contourArea)
         bottom = int(camera_image.shape[0] / 9)
-        if (centroid_y > camera_image.shape[0] - bottom and len(contours) > 1):
-            self.num_x_walks+=1
-            return True
+        for contour in contours:
+            moments = cv2.moments(contour)
+            centroid_y = int(moments["m01"] / moments["m00"])
+            if (centroid_y > camera_image.shape[0] - bottom):
+                self.num_x_walks+=1
+                return True
         return False 
         
     def is_ped_crossing(self, camera_image):
@@ -222,7 +209,6 @@ class Controller:
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
         mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
-
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -241,19 +227,14 @@ class Controller:
         gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
         _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
         binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
-        cv2.imshow("Camera Feed", binary)
-        cv2.waitKey(1)
+        # cv2.imshow("Camera Feed", binary)
+        # cv2.waitKey(1)
         if (np.sum(binary) == 0):
             cmd_vel_msg = Twist()
             cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
             print("stop for truck")
-            # increment = 0.1
-            # curent_time = time.time()
-            # end_time = curent_time + increment
-            # while(curent_time < end_time):
-            #     curent_time = time.time()
             self.last_frame = camera_image
             self.is_inside = True
             return True
@@ -278,20 +259,6 @@ class Controller:
             self.truck_passing+=1
         self.last_frame = camera_image
     
-    # def get_image_to_compare(self, camera_image):
-    #     threshold = 60
-    #     height, width = image.shape[:2]
-    #     num_pixels_top = 350
-    #     num_pixels_bot = 200
-    #     num_pixels_l = 500
-    #     num_pixels_r = 350
-    #     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #     gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
-    #     _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
-    #     binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
-    #     return binary
-                        
-
 if __name__ =='__main__':
     rospy.init_node('camera_velocity_nodes')
     controller_nodes =  Controller()
