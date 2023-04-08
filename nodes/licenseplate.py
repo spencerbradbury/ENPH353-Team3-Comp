@@ -16,27 +16,16 @@ import math
 class PlateDetector:
     def __init__(self):
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/plate_detection", Image, self.image_callback)
+        self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         # self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
-        self.uh = 125
-        self.us = 107
-        self.uv = 180
-        self.lh = 107
-        self.ls = 23
-        self.lv = 89
-        self.thresh = 45
-        self.lower_hsv = np.array([self.lh,self.ls,self.lv])
-        self.upper_hsv = np.array([self.uh,self.us,self.uv])
 
-        self.uh2 = 60
-        self.us2 = 8
-        self.uv2 = 203
-        self.lh2 = 0
-        self.ls2 = 0
-        self.lv2 = 90
-        self.lower_hsv2 = np.array([self.lh2,self.ls2,self.lv2])
-        self.upper_hsv2 = np.array([self.uh2,self.us2,self.uv2])
+        self.thresh = 45
+        self.lower_hsv = np.array([107,23,89])
+        self.upper_hsv = np.array([125,107,180])
+
+        self.lower_hsv2 = np.array([0,0,90])
+        self.upper_hsv2 = np.array([60,8,203])
 
         self.line_lower_hsv = np.array([0,0,208])
         self.line_upper_hsv = np.array([255,255,255])
@@ -55,10 +44,13 @@ class PlateDetector:
         mask = cv.inRange(hsv, self.lower_hsv, self.upper_hsv)
         blurred = cv.GaussianBlur(mask, (31, 31), 0)
         thresh = cv.threshold(blurred, self.thresh, 255, cv.THRESH_BINARY)[1]
+        cv.imshow("thresh", thresh)
 
         ## get the contours of tresh sorted by contour size, largest first
         contours, _ = cv.findContours(thresh.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=cv.contourArea, reverse=True)
+
+        w_thresh = 30
 
         if len(contours) >= 2:
             contour1 = contours[0]
@@ -67,40 +59,34 @@ class PlateDetector:
             (x2, y2, w2, h2) = cv.boundingRect(contour2)
             if (abs(y1-y2) < 15):
                 plate = np.concatenate((contour1, contour2), axis=0)
-                #find center of conts
+                (x, y, w, h) = cv.boundingRect(plate)
                 M = cv.moments(plate)
-                if M["m00"] != 0:
+                if M["m00"] != 0 and w > w_thresh:
                     platecX = int(M["m10"] / M["m00"])
                     platecY = int(M["m01"] / M["m00"])
                 else:
                     platecX, platecY = 0, 0
-                (x, y, w, h) = cv.boundingRect(plate)
             else:
                 plate = contour1
                 (x, y, w, h) = cv.boundingRect(contour1)
                 M = cv.moments(contour1)
-                if M["m00"] != 0:
+                if M["m00"] != 0 and w > w_thresh:
                     platecX = int(M["m10"] / M["m00"])
                     platecY = int(M["m01"] / M["m00"])
                 else:
                     platecX, platecY = 0, 0
-            # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # print(f"Bounding Box Size: {w}x{h}")
 
         elif len(contours) == 1:
             contour1 = contours[0]
             plate = contour1
             (x, y, w, h) = cv.boundingRect(contour1)
-            # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             M = cv.moments(contour1)
-            if M["m00"] != 0:
+            if M["m00"] != 0 and w > w_thresh:
                 platecX = int(M["m10"] / M["m00"])
                 platecY = int(M["m01"] / M["m00"])
             else:
                 platecX, platecY = 0, 0
-            # print(f"Bounding Box Size: {w}x{h}")
         else:
-            # print("No contours found")
             platecX, platecY = 0, 0
 
             
@@ -108,54 +94,79 @@ class PlateDetector:
         #make the line mask all 0s in the upper half of the image
         line_mask[0:10*720//17,:] = 0
         blurred_line = cv.GaussianBlur(line_mask, (41, 41), 0)
-        # cv.imshow("blurred line", blurred_line)
         thresh_line = cv.threshold(blurred_line, 1, 255, cv.THRESH_BINARY)[1]
-        cv.imshow("thresh line", thresh_line)
         line_mask = thresh_line.copy()
-        # cv.morphologyEx(line_mask, cv.MORPH_DILATE, (21,21), line_mask, iterations=10)
-        # cv.imshow("line mask", line_mask)
         line_mask = cv.bitwise_not(line_mask)
         blur = cv.GaussianBlur(hsv, (1, 1), 0)
         mask2 = cv.inRange(blur, self.lower_hsv2, self.upper_hsv2)
-        # cv.imshow("mask2", mask2)
         mask2 = cv.bitwise_and(mask2, line_mask)
-        # cv.imshow("Combined Mask", mask2)
         cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
         cv.morphologyEx(mask2, cv.MORPH_CLOSE, (5,5), mask2, iterations=2)
-        # cv.imshow("processed", mask2)
         contours2, _ = cv.findContours(mask2.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours2 = sorted(contours2, key=cv.contourArea, reverse=True)
         
         try:
-            car = plate
+            all_contours = []
             for i in range(min(len(contours2), 5)):
                 #find the distance between the center of the plate and the center of the contour
                 #pass if contour does not have a size between 100 and 1000
-                if cv.contourArea(contours2[i]) < 200 or cv.contourArea(contours2[i]) > 10000000:
+                if cv.contourArea(contours2[i]) < 200:
                     continue
 
-
+                # cv.drawContours(image, contours2, i, (0,255,0), 3)
                 M = cv.moments(contours2[i])
                 if M["m00"] != 0:
                     cX = int(M["m10"] / M["m00"])
                     cY = int(M["m01"] / M["m00"])
                 else:
                     cX, cY = image.shape[1], image.shape[0]
+
                 xdist = abs(platecX - cX)
                 ydist = abs(platecY - cY)
 
-                if ydist < 150 and xdist < 50:
-                    # cv.drawContours(image, contours2, i, (0, 0, 255), 2)
-                    car = np.concatenate((car, contours2[i]), axis=0)
+                if ydist < 150 and xdist < 25:
+                    all_contours.append(contours2[i])
                 else:
-                    # cv.drawContours(image, contours2, i, (255, 0, 0), 2)
                     pass
 
-            if car.size != 0:
-                (x, y, w, h) = cv.boundingRect(car)
-                # cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                crop = image[y:y+h, x:x+w]
-                cv.imshow("crop", crop)
+            if len(all_contours) == 2:
+                #find the corners of each contour
+                all_corners = []
+                for c in all_contours:
+                    epsilon = 0.03 * cv.arcLength(c, True)
+                    approx = cv.approxPolyDP(c, epsilon, True)
+                    hull = cv.convexHull(approx)
+                    # cv.drawContours(image, [hull], -1, (255, 255, 0), 3)
+                    corners = np.int0(hull)
+                    for c in corners:   
+                        # cv.circle(image, (c[0][0], c[0][1]), 5, (0, 0, 255), -1)         
+                        all_corners.append(c)
+                
+                #sort all corners based on y height
+                all_corners.sort(key=lambda x: x[0][1])
+                top = all_corners[:2]
+                bot = all_corners[-2:]
+                top.sort(key=lambda x: x[0][0])
+                bot.sort(key=lambda x: x[0][0])
+
+                corners = np.array([top[1][0], top[0][0], bot[1][0], bot[0][0]])
+                
+                # Define the new set of four points representing the desired perspective-shifted shape
+                dst_points = np.array([ \
+                                        [300, 0],\
+                                        [0, 0],\
+                                        [300, 400],\
+                                        [0, 400]],\
+                                        dtype=np.float32)
+                
+                # Find the perspective transformation matrix that maps the original contour to the new contour
+                M = cv.getPerspectiveTransform(corners.astype(np.float32), dst_points)
+                
+                # # Apply the transformation to the original image
+                result = cv.warpPerspective(image, M, (300, 400))
+
+                cv.imshow("result", result)
+
         except UnboundLocalError as e:
             print("No plate found")
 
