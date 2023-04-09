@@ -7,7 +7,10 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from keras.models import load_model
 from std_msgs.msg import String
+import time
+import os
 
+IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
 # CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/character_model.h5'
 
 class PlateDetector:
@@ -188,6 +191,8 @@ class PlateDetector:
                 #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
                 if total_area > 6350 and total_area < 7150 and len(contours) >= 2:
                     cv.imshow("result", result)
+                    image_name = f"{time.time()}.jpg"
+                    cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
                     cv.waitKey(1)
 
         except UnboundLocalError as e:
