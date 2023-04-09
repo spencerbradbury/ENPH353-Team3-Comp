@@ -2,14 +2,11 @@
 
 import numpy as np
 import cv2 as cv
-import time
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-import os
 from keras.models import load_model
 from std_msgs.msg import String
-import math
 
 # CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/character_model.h5'
 
@@ -24,11 +21,15 @@ class PlateDetector:
         self.lower_hsv = np.array([107,23,89])
         self.upper_hsv = np.array([125,107,180])
 
-        self.lower_hsv2 = np.array([0,0,90])
-        self.upper_hsv2 = np.array([60,8,203])
+        self.backofcar_lower_hsv = np.array([0,0,90])
+        self.backofcar_upper_hsv = np.array([60,8,203])
 
         self.line_lower_hsv = np.array([0,0,208])
         self.line_upper_hsv = np.array([255,255,255])
+
+        self.char_upper_hsv = np.array([121,255,255])
+        self.char_lower_hsv = np.array([118,38,88])
+
 
     def image_callback(self,msg):
         try:
@@ -44,7 +45,7 @@ class PlateDetector:
         mask = cv.inRange(hsv, self.lower_hsv, self.upper_hsv)
         blurred = cv.GaussianBlur(mask, (31, 31), 0)
         thresh = cv.threshold(blurred, self.thresh, 255, cv.THRESH_BINARY)[1]
-        cv.imshow("thresh", thresh)
+        # cv.imshow("thresh", thresh)
 
         ## get the contours of tresh sorted by contour size, largest first
         contours, _ = cv.findContours(thresh.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
@@ -98,7 +99,8 @@ class PlateDetector:
         line_mask = thresh_line.copy()
         line_mask = cv.bitwise_not(line_mask)
         blur = cv.GaussianBlur(hsv, (1, 1), 0)
-        mask2 = cv.inRange(blur, self.lower_hsv2, self.upper_hsv2)
+        mask2 = cv.inRange(blur, self.backofcar_lower_hsv, self.backofcar_upper_hsv)
+        # cv.imshow("mask2", mask2)
         mask2 = cv.bitwise_and(mask2, line_mask)
         cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
         cv.morphologyEx(mask2, cv.MORPH_CLOSE, (5,5), mask2, iterations=2)
@@ -165,7 +167,28 @@ class PlateDetector:
                 # # Apply the transformation to the original image
                 result = cv.warpPerspective(image, M, (300, 400))
 
-                cv.imshow("result", result)
+                hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
+                result_mask = cv.inRange(hsv_result, self.char_lower_hsv, self.char_upper_hsv)
+                cv.imshow("result_mask", result_mask)
+                cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
+                contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+                contours = sorted(contours, key=cv.contourArea, reverse=True)
+
+                # cv.drawContours(result, contours, -1, (0, 255, 0), 3)
+
+                total_area = 0
+
+                for c in contours:
+                    if cv.contourArea(c) > 300:
+                        (x, y, w, h) = cv.boundingRect(c)
+                        # cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 255), 2)
+                        total_area += w*h
+                
+                #Look for area in this range, and at least 2 contours
+                #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
+                if total_area > 6350 and total_area < 7150 and len(contours) >= 2:
+                    cv.imshow("result", result)
+                    cv.waitKey(1)
 
         except UnboundLocalError as e:
             print("No plate found")

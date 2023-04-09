@@ -4,19 +4,19 @@ import numpy as np
 import cv2 as cv
 import time
 
-kernel = (5,5)
+kernel = (1,1)
 
-top = cv.GaussianBlur(cv.resize(cv.imread('../media/masking/Plate_1.jpg',cv.IMREAD_COLOR), (480, 270)), kernel, 0)
+top = cv.GaussianBlur(cv.resize(cv.imread('../media/cropped/p1.png',cv.IMREAD_COLOR), (300, 400)), kernel, 0)
 for i in range(2,5):
-    top = np.concatenate((top, cv.GaussianBlur(cv.resize(cv.imread('../media/masking/Plate_{}.jpg'.format(i),cv.IMREAD_COLOR), (480,270)), kernel, 0)), axis=1)
+    top = np.concatenate((top, cv.GaussianBlur(cv.resize(cv.imread('../media/cropped/p{}.png'.format(i),cv.IMREAD_COLOR), (300,400)), kernel, 0)), axis=1)
 
-bot = cv.GaussianBlur(cv.resize(cv.imread('../media/masking/Plate_5.jpg',cv.IMREAD_COLOR), (480, 270)), kernel, 0)
+bot = cv.GaussianBlur(cv.resize(cv.imread('../media/cropped/p5.png',cv.IMREAD_COLOR), (300, 400)), kernel, 0)
 for i in range(6,9):
-    bot = np.concatenate((bot, cv.GaussianBlur(cv.resize(cv.imread('../media/masking/Plate_{}.jpg'.format(i),cv.IMREAD_COLOR), (480,270)), kernel, 0)), axis=1)
+    bot = np.concatenate((bot, cv.GaussianBlur(cv.resize(cv.imread('../media/cropped/p{}.png'.format(i),cv.IMREAD_COLOR), (300,400)), kernel, 0)), axis=1)
 
 img  = np.concatenate((top, bot), axis=0)
 
-# img = cv.GaussianBlur(cv.imread('../media/masking/Plate_3.jpg', cv.IMREAD_COLOR), (31,31),0)
+# img = cv.GaussianBlur(cv.imread('../media/cropped/p3.png', cv.IMREAD_COLOR), (31,31),0)
 cv.imshow('Regular Images', img)
 
 
@@ -37,7 +37,7 @@ mask = cv.inRange(hsv, lower_hsv, upper_hsv)
 window_name = "HSV Calibrator"
 cv.namedWindow(window_name)
 
-def nothing(x):
+def nothing(x): 
     print("Trackbar value: " + str(x))
     pass
 
