@@ -101,8 +101,7 @@ class PlateDetector:
         thresh_line = cv.threshold(blurred_line, 1, 255, cv.THRESH_BINARY)[1]
         line_mask = thresh_line.copy()
         line_mask = cv.bitwise_not(line_mask)
-        blur = cv.GaussianBlur(hsv, (1, 1), 0)
-        mask2 = cv.inRange(blur, self.backofcar_lower_hsv, self.backofcar_upper_hsv)
+        mask2 = cv.inRange(hsv, self.backofcar_lower_hsv, self.backofcar_upper_hsv)
         # cv.imshow("mask2", mask2)
         mask2 = cv.bitwise_and(mask2, line_mask)
         cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
