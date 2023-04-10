@@ -83,31 +83,32 @@ class Controller:
             
         self.plate_detection_pub.publish(msg)
         self.state_machine(camera_image)
-        cv2.imshow("Camera Feed", camera_image)
-        cv2.waitKey(1)
+        #cv2.imshow("Camera Feed", camera_image)
+        #cv2.waitKey(1)
 
     def velocity_callback(self, msg):
         #press t to start/stop recording 
-        if (msg.linear.z > 0):
-            self.recording_count += 1
-            if (self.recording_count % 2 == 0):
-                self.isrecording = True
-            else:
-                self.isrecording = False
-            print("Recording {}".format(self.isrecording))
+        # if (msg.linear.z > 0):
+        #     self.recording_count += 1
+        #     if (self.recording_count % 2 == 0):
+        #         self.isrecording = True
+        #     else:
+        #         self.isrecording = False
+        #     print("Recording {}".format(self.isrecording))
         
-        #press b to start/stop autopilot
-        if (msg.linear.z < 0):
-            self.autopilot = not self.autopilot
-            print("Autopilot {}".format(self.autopilot))
+        # #press b to start/stop autopilot
+        # if (msg.linear.z < 0):
+        #     self.autopilot = not self.autopilot
+        #     print("Autopilot {}".format(self.autopilot))
 
-        self.xspeed = msg.linear.x
-        self.zang = msg.angular.z
+        # self.xspeed = msg.linear.x
+        # self.zang = msg.angular.z
+        pass
 
-    def record_frames_states(self, camera_image):
-        image_name = f"Plate_{(self.recording_count/2)+1}_{time.time()}.jpg"
-        cv2.imwrite(os.path.join(MASKING_PATH, image_name), camera_image)
-        print("Recording frame {}".format(image_name))
+    # def record_frames_states(self, camera_image):
+    #     image_name = f"Plate_{(self.recording_count/2)+1}_{time.time()}.jpg"
+    #     cv2.imwrite(os.path.join(MASKING_PATH, image_name), camera_image)
+    #     print("Recording frame {}".format(image_name))
 
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 7):
@@ -180,8 +181,8 @@ class Controller:
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
         mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
-        cv2.imshow("mask", mask)
-        cv2.waitKey(1)
+        #cv2.imshow("mask", mask)
+        #cv2.waitKey(1)
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) == 0:
