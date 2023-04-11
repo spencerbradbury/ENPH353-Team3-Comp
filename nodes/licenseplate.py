@@ -15,7 +15,7 @@ import csv
 
 IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
 # CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/character_model.h5'
-# DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 columns = ['plates']
 PLATES_DATA = pd.read_csv('/home/fizzer/ros_ws/src/2022_competition/enph353/enph353_gazebo/scripts/plates.csv', header = None, names = columns)
 LIST_OF_PLATES = list(PLATES_DATA['plates'])
@@ -28,7 +28,7 @@ class PlateDetector:
         # self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
 
         #just for testing
-        # self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
+        self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
         self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
 
         self.thresh = 45
@@ -56,7 +56,7 @@ class PlateDetector:
             print(e)
 
         #for testing with a 2nd driving model
-        # raw_image = image
+        raw_image = image
 
         # Convert BGR to HSV
         hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
@@ -206,16 +206,16 @@ class PlateDetector:
                 #Look for area in this range, and at least 2 contours
                 #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
                 if total_area > 6350 and total_area < 7150 and len(contours) >= 2:
-                    #cv.imshow("result", result)
-                    image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
-                    cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
-                    #cv.waitKey(1)
+                    cv.imshow("result", result)
+                    #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
+                    #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
+                    cv.waitKey(1)
 
                     #just for testing
-                    # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
-                    # raw_image = np.float16(raw_image/255.)
-                    # raw_image = raw_image.reshape((1, 36, 64, 3))
-                    # predicted_actions = self.driving_model.predict(raw_image)
+                    raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
+                    raw_image = np.float16(raw_image/255.)
+                    raw_image = raw_image.reshape((1, 36, 64, 3))
+                    predicted_actions = self.driving_model.predict(raw_image)
 
         except UnboundLocalError as e:
             print("No plate found")
