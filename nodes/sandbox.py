@@ -8,11 +8,12 @@ import numpy as np
 import os
 import time
 from keras.models import load_model
+from std_msgs.msg import String
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/V2/V2_Road_1stCar/'
-DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V13_1_80_01_smaller.h5'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/V2/V2_Inner_more_1turn/'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -24,6 +25,8 @@ class Controller:
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
+        self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
+        self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.xspeed = 0
@@ -39,6 +42,8 @@ class Controller:
             camera_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             print(e)
+
+        self.plate_detection_pub.publish(msg)
 
         if (self.isrecording == True):
             self.record_frames_states(camera_image)
@@ -84,8 +89,7 @@ class Controller:
         camera_image = np.float16(camera_image/255.)
         camera_image = camera_image.reshape((1, 36, 64, 3)) # 1 for gay, 3 for bgr
         
-        predicted_actions = self.driving_model.predict(camera_image)
-        print(predicted_actions)
+        predicted_actions = self.driving_model(camera_image)
         action = np.argmax(predicted_actions)
         comparator = np.random.randint(10, )/10.
         cmd_vel_msg = Twist()
