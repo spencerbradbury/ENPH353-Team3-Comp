@@ -13,11 +13,11 @@ from std_msgs.msg import String
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V12_1_80_01_smaller.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V17_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
 ##
@@ -34,7 +34,6 @@ class Controller:
         #define ros nodes
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
-        self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
         #set initial fields for robot velocity, 
@@ -83,34 +82,11 @@ class Controller:
             
         self.plate_detection_pub.publish(msg)
         self.state_machine(camera_image)
-        cv2.imshow("Camera Feed", camera_image)
-        cv2.waitKey(1)
-
-    def velocity_callback(self, msg):
-        #press t to start/stop recording 
-        if (msg.linear.z > 0):
-            self.recording_count += 1
-            if (self.recording_count % 2 == 0):
-                self.isrecording = True
-            else:
-                self.isrecording = False
-            print("Recording {}".format(self.isrecording))
-        
-        #press b to start/stop autopilot
-        if (msg.linear.z < 0):
-            self.autopilot = not self.autopilot
-            print("Autopilot {}".format(self.autopilot))
-
-        self.xspeed = msg.linear.x
-        self.zang = msg.angular.z
-
-    def record_frames_states(self, camera_image):
-        image_name = f"Plate_{(self.recording_count/2)+1}_{time.time()}.jpg"
-        cv2.imwrite(os.path.join(MASKING_PATH, image_name), camera_image)
-        print("Recording frame {}".format(image_name))
+        #cv2.imshow("Camera Feed", camera_image)
+        #cv2.waitKey(1)
 
     def drive_with_autopilot(self, camera_image):
-        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 7):
+        if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 2):
             self.robot_state = 2
         elif (self.robot_state == 4 and not self.is_inside and self.has_entered_inner_loop(camera_image)):
             self.robot_state = 5
@@ -124,11 +100,17 @@ class Controller:
                 camera_image = np.float16(camera_image/255.)
                 camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
             if self.robot_state == 1:
-                predicted_actions = self.driving_model_1.predict(camera_image)
-                linear_x = 0.3 #0.3
+                predicted_actions = self.driving_model_1(camera_image)
+                linear_x = 0.5 #0.3
+                angular_z = 2.8
             else: 
-                predicted_actions = self.driving_model_2.predict(camera_image)
-                linear_x = 0.3 #0.3
+                predicted_actions = self.driving_model_2(camera_image)
+                if self.is_inside == True:
+                    linear_x = 0.3
+                    angular_z = 2.8
+                else:
+                    linear_x = 0.4 #0.3
+                    angular_z = 2.5 #2.5
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
             if (action == 0): #drive forward
@@ -136,10 +118,10 @@ class Controller:
                 cmd_vel_msg.angular.z = 0
             elif(action == 1): #turn left 
                 cmd_vel_msg.linear.x = linear_x
-                cmd_vel_msg.angular.z = 2.2 #2.2
+                cmd_vel_msg.angular.z = angular_z #2.2
             else:
                 cmd_vel_msg.linear.x = linear_x
-                cmd_vel_msg.angular.z = -2.2
+                cmd_vel_msg.angular.z = -angular_z
             self.cmd_vel_pub.publish(cmd_vel_msg)
 
     def innitialize_robot(self):
@@ -156,8 +138,6 @@ class Controller:
         cmd_vel_msg.linear.x = 0
         cmd_vel_msg.angular.z = 0
         self.cmd_vel_pub.publish(cmd_vel_msg)
-        print("stop for x-walk")
-        self.time_last_x_walk = time.time()
         self.robot_state = 3 #change to wait for ped in the future
 
     def wait_for_ped(self, camera_image):
@@ -169,6 +149,7 @@ class Controller:
         if self.num_x_walks >= 2:
             self.robot_state = 4
         else: self.robot_state = 1
+        self.time_last_x_walk = time.time()
         
     def is_x_walk_in_front (self, camera_image):
         hsv = cv2.cvtColor(camera_image, cv2.COLOR_BGR2HSV)
@@ -180,8 +161,8 @@ class Controller:
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
         mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
-        cv2.imshow("mask", mask)
-        cv2.waitKey(1)
+        #cv2.imshow("mask", mask)
+        #cv2.waitKey(1)
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) == 0:
@@ -239,7 +220,6 @@ class Controller:
             cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
-            print("stop for truck")
             self.last_frame = camera_image
             self.is_inside = True
             return True
@@ -250,10 +230,8 @@ class Controller:
         current_gray = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)/255.
         diff_img = cv2.absdiff(last_gray, current_gray)
         difference = diff_img.sum()
-        print(difference)
         if difference >= 10_000 or difference <= 7_500:
             if(self.truck_passing > 4):
-                print('truck passed')
                 self.robot_state = 4
                 if difference >= 10_000:
                     increment = 2

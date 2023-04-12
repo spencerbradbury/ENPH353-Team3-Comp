@@ -6,4 +6,9 @@
 			output = "screen">
 	</node>
 
+	<node	pkg = "controller_pkg"
+			type = "licenseplate.py"
+			name = "licenseplate"
+			output = "screen">
+	</node>
 </launch>

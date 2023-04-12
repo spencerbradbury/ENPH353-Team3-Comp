@@ -9,16 +9,27 @@ from keras.models import load_model
 from std_msgs.msg import String
 import time
 import os
+from geometry_msgs.msg import Twist
+import pandas as pd
+import csv
 
 IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
-# CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/character_model.h5'
+CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V1.h5'
+DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
+columns = ['plates']
+PLATES_DATA = pd.read_csv('/home/fizzer/ros_ws/src/2022_competition/enph353/enph353_gazebo/scripts/plates.csv', header = None, names = columns)
+LIST_OF_PLATES = list(PLATES_DATA['plates'])
 
 class PlateDetector:
     def __init__(self):
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
-        # self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
+        self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
+
+        #just for testing
+        #self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
+        self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
 
         self.thresh = 45
         self.lower_hsv = np.array([107,23,89])
@@ -33,6 +44,9 @@ class PlateDetector:
         self.char_upper_hsv = np.array([121,255,255])
         self.char_lower_hsv = np.array([118,38,88])
 
+        #for recording
+        self.park_spot = 1
+
 
     def image_callback(self,msg):
         try:
@@ -40,6 +54,9 @@ class PlateDetector:
             image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             print(e)
+
+        #for testing with a 2nd driving model
+        raw_image = image
 
         # Convert BGR to HSV
         hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
@@ -171,7 +188,7 @@ class PlateDetector:
 
                 hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
                 result_mask = cv.inRange(hsv_result, self.char_lower_hsv, self.char_upper_hsv)
-                cv.imshow("result_mask", result_mask)
+                #cv.imshow("result_mask", result_mask)
                 cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
                 contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
                 contours = sorted(contours, key=cv.contourArea, reverse=True)
@@ -188,18 +205,65 @@ class PlateDetector:
                 
                 #Look for area in this range, and at least 2 contours
                 #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
-                if total_area > 6350 and total_area < 7150 and len(contours) >= 2:
-                    cv.imshow("result", result)
-                    image_name = f"{time.time()}.jpg"
-                    cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
-                    cv.waitKey(1)
+                if total_area > 6250 and total_area < 7250 and len(contours) >= 2:
+                    #cv.imshow("result", result)
+                    #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
+                    #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
+                    #cv.waitKey(1)
+
+                    chars = self.get_chars_from_image(result)
+                    if (len(chars) == 4 and chars[3].shape == (40, 50)):
+                        char0 = np.argmax(self.character_model(chars[0].reshape((1, 40, 50, 1)))[0])
+                        char1 = np.argmax(self.character_model(chars[1].reshape((1, 40, 50, 1)))[0])
+                        char2 = np.argmax(self.character_model(chars[2].reshape((1, 40, 50, 1)))[0])
+                        char3 = np.argmax(self.character_model(chars[3].reshape((1, 40, 50, 1)))[0])
+                        
+                        char0 = chr(char0+65)
+                        char1 = chr(char1+65)
+                        char2 = chr(char2+48-26)
+                        char3 = chr(char3+48-26)
+                        print(f"{char0}{char1}{char2}{char3}")
+                    #just for testing
+                    # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
+                    # raw_image = np.float16(raw_image/255.)
+                    # raw_image = raw_image.reshape((1, 36, 64, 3))
+                    # predicted_actions = self.driving_model.predict(raw_image)
 
         except UnboundLocalError as e:
             print("No plate found")
 
 
-        cv.imshow("main", image)
-        cv.waitKey(1)
+        #cv.imshow("main", image)
+        #cv.waitKey(1)
+    
+    def velocity_callback(self, msg):
+        #press t to increment license plate number 
+        if (msg.linear.z > 0):
+            self.park_spot+=1
+            print("Recording P{}".format(self.park_spot))
+
+    def get_chars_from_image(self, result):
+        hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
+        result_mask = cv.inRange(hsv_result, self.char_lower_hsv, self.char_upper_hsv)
+        cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
+        contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv.contourArea, reverse=True)
+
+        bounding_boxes = []
+        for c in contours:
+                            if cv.contourArea(c) > 300:
+                                (x, y, w, h) = cv.boundingRect(c)
+                                bounding_boxes.append((x, y, w, h))
+        bounding_boxes.sort(key=lambda x: x[0], reverse=False)
+        chars = []
+
+        for box in bounding_boxes:
+            if box[2] > 60:
+                chars.append(cv.cvtColor(result[box[1]: box[1]+40, box[0]: box[0]+50], cv.COLOR_BGR2GRAY))
+                chars.append(cv.cvtColor(result[box[1]: box[1]+40, box[0]+box[2]//2: box[0]+box[2]//2+50], cv.COLOR_BGR2GRAY))
+            else:
+                chars.append(cv.cvtColor(result[box[1]: box[1]+40, box[0]: box[0]+50], cv.COLOR_BGR2GRAY))
+        return chars
 
 if __name__ =='__main__':
     rospy.init_node('licenseplate')

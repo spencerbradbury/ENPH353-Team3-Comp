@@ -12,7 +12,7 @@ from std_msgs.msg import String
 #from tensorflow.keras import optimizers
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
-IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/V2/V2_11_corrections/'
+IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/V2/V2_Inner_more_1turn/'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
@@ -89,8 +89,7 @@ class Controller:
         camera_image = np.float16(camera_image/255.)
         camera_image = camera_image.reshape((1, 36, 64, 3)) # 1 for gay, 3 for bgr
         
-        predicted_actions = self.driving_model.predict(camera_image)
-        print(predicted_actions)
+        predicted_actions = self.driving_model(camera_image)
         action = np.argmax(predicted_actions)
         comparator = np.random.randint(10, )/10.
         cmd_vel_msg = Twist()
