@@ -13,11 +13,11 @@ from std_msgs.msg import String
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_1_80_01_smaller.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V12_2_80_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V15_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
 ##
@@ -125,10 +125,10 @@ class Controller:
                 camera_image = np.float16(camera_image/255.)
                 camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
             if self.robot_state == 1:
-                predicted_actions = self.driving_model_1.predict(camera_image)
+                predicted_actions = self.driving_model_1(camera_image)
                 linear_x = 0.3 #0.3
             else: 
-                predicted_actions = self.driving_model_2.predict(camera_image)
+                predicted_actions = self.driving_model_2(camera_image)
                 linear_x = 0.3 #0.3
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
