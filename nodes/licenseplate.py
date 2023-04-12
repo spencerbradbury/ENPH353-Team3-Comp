@@ -213,16 +213,17 @@ class PlateDetector:
 
                     chars = self.get_chars_from_image(result)
                     if (len(chars) == 4 and chars[3].shape == (40, 50)):
-                        char0 = np.argmax(self.character_model(chars[0].reshape((1, 40, 50, 1)))[0])
-                        char1 = np.argmax(self.character_model(chars[1].reshape((1, 40, 50, 1)))[0])
-                        char2 = np.argmax(self.character_model(chars[2].reshape((1, 40, 50, 1)))[0])
-                        char3 = np.argmax(self.character_model(chars[3].reshape((1, 40, 50, 1)))[0])
+                        char0 = np.argmax(self.character_model(chars[0].reshape((1, 40, 50, 1)))[0][:26])
+                        char1 = np.argmax(self.character_model(chars[1].reshape((1, 40, 50, 1)))[0][:26])
+                        char2 = np.argmax(self.character_model(chars[2].reshape((1, 40, 50, 1)))[0][26:])
+                        char3 = np.argmax(self.character_model(chars[3].reshape((1, 40, 50, 1)))[0][26:])
                         
                         char0 = chr(char0+65)
                         char1 = chr(char1+65)
                         char2 = chr(char2+48-26)
                         char3 = chr(char3+48-26)
                         print(f"{char0}{char1}{char2}{char3}")
+                        self.license_plate_pub.publish(str(f'Team3,SS,1,{char0}{char1}{char2}{char3}')) 
                     #just for testing
                     # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
                     # raw_image = np.float16(raw_image/255.)
