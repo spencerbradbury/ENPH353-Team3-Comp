@@ -16,12 +16,8 @@ IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/medi
 DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
-<<<<<<< HEAD
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V15_2_100_01_smaller.h5'
-=======
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
 DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V17_2_100_01_smaller.h5'
->>>>>>> spencer
 INPUT2 = [36, 64]
 F2 = 0.05
 ##
@@ -38,12 +34,9 @@ class Controller:
         #define ros nodes
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
-<<<<<<< HEAD
         #self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
-=======
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
->>>>>>> spencer
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.recording_count = -1
@@ -90,14 +83,8 @@ class Controller:
             
         self.plate_detection_pub.publish(msg)
         self.state_machine(camera_image)
-<<<<<<< HEAD
-        cv2.imshow("Camera Feed", camera_image)
-        cv2.waitKey(1)
-
-=======
         #cv2.imshow("Camera Feed", camera_image)
         #cv2.waitKey(1)
->>>>>>> spencer
 
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 2):
