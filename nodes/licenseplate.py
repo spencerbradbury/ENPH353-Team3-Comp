@@ -206,10 +206,10 @@ class PlateDetector:
                 #Look for area in this range, and at least 2 contours
                 #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
                 if total_area > 6250 and total_area < 7250 and len(contours) >= 2:
-                    cv.imshow("result", result)
+                    #cv.imshow("result", result)
                     #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
                     #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
-                    cv.waitKey(1)
+                    #cv.waitKey(1)
 
                     chars = self.get_chars_from_image(result)
                     if (len(chars) == 4 and chars[3].shape == (40, 50)):
