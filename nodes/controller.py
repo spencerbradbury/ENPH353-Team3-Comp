@@ -127,7 +127,7 @@ class Controller:
 
     def innitialize_robot(self):
         cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = .3
+        cmd_vel_msg.linear.x = .5
         cmd_vel_msg.angular.z = 1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
         if(self.innit_frames > 15):
