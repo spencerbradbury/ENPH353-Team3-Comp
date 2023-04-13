@@ -17,7 +17,7 @@ DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Com
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V17_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V15_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
 ##
@@ -26,10 +26,6 @@ class Controller:
     def __init__(self):
 
         self.bridge = CvBridge()
-
-
-        #Initialize time, used to stop clock in time trial
-        self.start_time = time.time()
 
         #define ros nodes
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
@@ -55,6 +51,7 @@ class Controller:
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
+        self.license_plate_pub.publish(str("Team3,SS,0,GOGO"))
     
     def state_machine(self, camera_image):
 
