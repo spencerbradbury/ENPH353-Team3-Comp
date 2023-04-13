@@ -52,7 +52,7 @@ class PlateDetector:
 
 
     def image_callback(self,msg):
-        if (self.plates_seen.all()):
+        if (self.plates_seen[-1]):
             self.license_plate_pub.publish(str('Team3,SS,-1,DONE'))
         try:
             # Convert your ROS Image message to OpenCV2

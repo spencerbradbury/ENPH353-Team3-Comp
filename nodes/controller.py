@@ -52,8 +52,8 @@ class Controller:
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
-        self.license_plate_pub.publish(str("Team3,SS,0,GOGO"))
         self.driving_model_3 = load_model('{}'.format(DRIVING_MODEL_PATH_3))
+        self.license_plate_pub.publish(str("Team3,SS,0,GOGO"))
     
     def state_machine(self, camera_image):
 
