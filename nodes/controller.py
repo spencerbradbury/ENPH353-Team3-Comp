@@ -13,13 +13,14 @@ from std_msgs.msg import String
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_1_80_01_smaller.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V15_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V15_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V21_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
+DRIVING_MODEL_PATH_3 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V19_2_100_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -52,6 +53,7 @@ class Controller:
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
         self.license_plate_pub.publish(str("Team3,SS,0,GOGO"))
+        self.driving_model_3 = load_model('{}'.format(DRIVING_MODEL_PATH_3))
     
     def state_machine(self, camera_image):
 
@@ -98,15 +100,16 @@ class Controller:
                 camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
             if self.robot_state == 1:
                 predicted_actions = self.driving_model_1(camera_image)
-                linear_x = 0.5 #0.3
-                angular_z = 2.8
+                linear_x = 0.45 #0.5
+                angular_z = 4.
             else: 
-                predicted_actions = self.driving_model_2(camera_image)
                 if self.is_inside == True:
-                    linear_x = 0.3
+                    predicted_actions = self.driving_model_3(camera_image)
+                    linear_x = 0.35
                     angular_z = 2.8
                 else:
-                    linear_x = 0.4 #0.3
+                    predicted_actions = self.driving_model_2(camera_image)
+                    linear_x = 0.4 #0.4
                     angular_z = 2.5 #2.5
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
@@ -145,6 +148,13 @@ class Controller:
     def cross_x_walk(self):
         if self.num_x_walks >= 2:
             self.robot_state = 4
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0.3
+            cmd_vel_msg.angular.z = -1.
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            current_t = time.time()+0.2
+            while time.time() < current_t:
+                pass
         else: self.robot_state = 1
         self.time_last_x_walk = time.time()
         
@@ -215,10 +225,19 @@ class Controller:
         if (np.sum(binary) == 0):
             cmd_vel_msg = Twist()
             cmd_vel_msg.linear.x = 0
+            cmd_vel_msg.angular.z = 1.
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            current_t = time.time()+0.2
+            while time.time() < current_t:
+                pass
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
             self.last_frame = camera_image
             self.is_inside = True
+
+        
             return True
         else: return False
     
