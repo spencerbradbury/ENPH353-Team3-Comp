@@ -17,10 +17,10 @@ DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Com
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V23_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V25_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
-DRIVING_MODEL_PATH_3 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_3 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V19_2_100_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -111,7 +111,7 @@ class Controller:
                 else: #grass driving
                     predicted_actions = self.driving_model_2(camera_image)
                     linear_x = 0.55 #0.5 , 0.6
-                    angular_z = 5.5 #4 , 4.5
+                    angular_z = 5. #4 , 4.5
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
             if (action == 0): #drive forward
@@ -155,10 +155,10 @@ class Controller:
         if self.num_x_walks >= 2:
             self.robot_state = 4
             cmd_vel_msg = Twist()
-            cmd_vel_msg.linear.x = 0.3
-            cmd_vel_msg.angular.z = -1.
+            cmd_vel_msg.linear.x = 0.4
+            cmd_vel_msg.angular.z = 0.
             self.cmd_vel_pub.publish(cmd_vel_msg)
-            current_t = time.time()+0.2
+            current_t = time.time()+0.5
             while time.time() < current_t:
                 pass
         else: self.robot_state = 1
@@ -192,11 +192,11 @@ class Controller:
     def is_ped_crossing(self, camera_image):
         height, width = camera_image.shape[:2]
         # Set the number of pixels to cut from each side
-        if (self.num_x_walks == 1):
-            num_pixels_v = 500
+        if (self.num_x_walks > 1):
+            num_pixels_v = 100
             num_pixels_h = 300
         else:
-            num_pixels_v = 100
+            num_pixels_v = 500
             num_pixels_h = 300
 
         # Cut the image by removing the specified number of pixels from each side
@@ -257,7 +257,7 @@ class Controller:
             if(self.truck_passing > 4):
                 self.robot_state = 4
                 if difference >= 10_000:
-                    increment = 2
+                    increment = 2.5
                     curent_time = time.time()
                     end_time = curent_time + increment
                     while(curent_time < end_time):
