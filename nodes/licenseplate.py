@@ -44,6 +44,7 @@ class PlateDetector:
         
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
+        self.slow_down_pub = rospy.Publisher("/slow_down", String, queue_size = 10)
 
     def image_callback(self,msg):
         if (self.plates_seen[-1] and self.clock_on):
@@ -229,6 +230,8 @@ class PlateDetector:
                     self.batch[i] = []
                 # print(f"P{guess[0]}: {guess[1]}{guess[2]}{guess[3]}{guess[4]}")
                 self.license_plate_pub.publish(str(f'Team3,SS,{guess[0]},{guess[1]}{guess[2]}{guess[3]}{guess[4]}'))
+                if (guess[0] == "6"):
+                    self.slow_down_pub.publish(str(f'Slow Down'))
             except Exception as e:
                 print("Nothing to Submit")
                 
