@@ -13,7 +13,7 @@ import os
 from geometry_msgs.msg import Twist
 
 IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
-CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V5.h5'
+CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V6.h5'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 
 class PlateDetector:
