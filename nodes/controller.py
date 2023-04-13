@@ -101,7 +101,7 @@ class Controller:
             if self.robot_state == 1:
                 predicted_actions = self.driving_model_1(camera_image)
                 linear_x = 0.45 #0.5
-                angular_z = 4.
+                angular_z = 4.0
             else: 
                 if self.is_inside == True:
                     predicted_actions = self.driving_model_3(camera_image)

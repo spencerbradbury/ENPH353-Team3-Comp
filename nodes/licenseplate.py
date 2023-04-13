@@ -197,20 +197,20 @@ class PlateDetector:
 
             total_area = 0
 
-                for c in contours:
-                    if cv.contourArea(c) > 300:
-                        (x, y, w, h) = cv.boundingRect(c)
-                        # cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                        total_area += w*h
-                
-                #Look for area in this range, and at least 2 contours
-                #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
-                if total_area > 6100 and total_area < 7500 and len(contours) >= 2:
-                    #cv.imshow("result", result)
-                    #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
-                    #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
-                    #cv.waitKey(1)
+            for c in contours:
+                if cv.contourArea(c) > 300:
+                    (x, y, w, h) = cv.boundingRect(c)
+                    # cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 255), 2)
+                    total_area += w*h
+            
+            #Look for area in this range, and at least 2 contours
+            #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
+            if total_area > 6100 and total_area < 7500 and len(contours) >= 2:
 
+                #cv.imshow("result", result)
+                #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
+                #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
+                #cv.waitKey(1)
                 try:
                     chars = self.get_chars_from_image(result)
                     id_im = self.get_ID_from_image(result)
@@ -231,11 +231,11 @@ class PlateDetector:
                         self.license_plate_pub.publish(str(f'Team3,SS,{id},{char0}{char1}{char2}{char3}')) 
                 except Exception as e:
                     print(e)
-                #just for testing
-                # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
-                # raw_image = np.float16(raw_image/255.)
-                # raw_image = raw_image.reshape((1, 36, 64, 3))
-                # predicted_actions = self.driving_model.predict(raw_image)
+            #just for testing
+            # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
+            # raw_image = np.float16(raw_image/255.)
+            # raw_image = raw_image.reshape((1, 36, 64, 3))
+            # predicted_actions = self.driving_model.predict(raw_image)
 
 
 
