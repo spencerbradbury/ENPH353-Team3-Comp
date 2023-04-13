@@ -7,12 +7,13 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from keras.models import load_model
 from std_msgs.msg import String
+from statistics import mode
 import time
 import os
 from geometry_msgs.msg import Twist
 
 IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
-CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V4.h5'
+CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V6.h5'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
 
 class PlateDetector:
@@ -21,6 +22,9 @@ class PlateDetector:
         self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
 
         self.plates_seen = np.zeros(8)
+        self.clock_on = True
+        self.batch = [[],[],[],[],[]]
+        self.previous_plate_time = -1
 
         self.thresh = 45
         self.lower_hsv = np.array([107,23,89])
@@ -42,8 +46,9 @@ class PlateDetector:
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
 
     def image_callback(self,msg):
-        if (self.plates_seen[-1]):
+        if (self.plates_seen[-1] and self.clock_on):
             self.license_plate_pub.publish(str('Team3,SS,-1,DONE'))
+            self.clock_on = False
         try:
             # Convert your ROS Image message to OpenCV2
             image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -177,7 +182,6 @@ class PlateDetector:
             cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
             contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
             contours = sorted(contours, key=cv.contourArea, reverse=True)
-
             total_area = 0
 
             for c in contours:
@@ -189,6 +193,7 @@ class PlateDetector:
             #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
             if total_area > 6100 and total_area < 7500 and len(contours) >= 2:
                 try:
+                    self.previous_plate_time = rospy.get_time()
                     chars = self.get_chars_from_image(result)
                     id_im = self.get_ID_from_image(result)
                     if (len(chars) == 4 and chars[3].shape == (40, 50)):
@@ -204,10 +209,29 @@ class PlateDetector:
                         char3 = chr(char3+48)
                         self.plates_seen[id-1] = 1
                         id = chr(id+48)
-                        print(f"P{id}: {char0}{char1}{char2}{char3}")
-                        self.license_plate_pub.publish(str(f'Team3,SS,{id},{char0}{char1}{char2}{char3}')) 
+                        self.batch[0].append(id)
+                        self.batch[1].append(char0)
+                        self.batch[2].append(char1)
+                        self.batch[3].append(char2)
+                        self.batch[4].append(char3)
+
+                        # print(f"P{id}: {char0}{char1}{char2}{char3}")
+                        # self.license_plate_pub.publish(str(f'Team3,SS,{id},{char0}{char1}{char2}{char3}')) 
                 except Exception as e:
                     print(e)
+
+        elif ((rospy.get_time() - self.previous_plate_time) > 0.7 and len(self.batch[0]) > 0):
+            try:
+                guess = []
+                for i in range(5):
+                    # print(self.batch[i])
+                    guess.append(mode(self.batch[i]))
+                    self.batch[i] = []
+                # print(f"P{guess[0]}: {guess[1]}{guess[2]}{guess[3]}{guess[4]}")
+                self.license_plate_pub.publish(str(f'Team3,SS,{guess[0]},{guess[1]}{guess[2]}{guess[3]}{guess[4]}'))
+            except Exception as e:
+                print("Nothing to Submit")
+                
 
     def get_chars_from_image(self, result):
         hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
