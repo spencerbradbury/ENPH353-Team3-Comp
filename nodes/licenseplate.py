@@ -10,23 +10,15 @@ from std_msgs.msg import String
 import time
 import os
 from geometry_msgs.msg import Twist
-import pandas as pd
-import csv
 
 IMAGE_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/Plates/'
 CHARACTER_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Chars/Chars_model_V4.h5'
 DRIVING_MODEL_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V11_2_80_01_smaller.h5'
-columns = ['plates']
-PLATES_DATA = pd.read_csv('/home/fizzer/ros_ws/src/2022_competition/enph353/enph353_gazebo/scripts/plates.csv', header = None, names = columns)
-LIST_OF_PLATES = list(PLATES_DATA['plates'])
 
 class PlateDetector:
     def __init__(self):
         self.bridge = CvBridge()
         self.character_model = load_model('{}'.format(CHARACTER_MODEL_PATH))
-
-        #just for testing
-        #self.driving_model = load_model('{}'.format(DRIVING_MODEL_PATH))
 
         self.plates_seen = np.zeros(8)
 
@@ -48,8 +40,6 @@ class PlateDetector:
         
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
-        self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
-
 
     def image_callback(self,msg):
         if (self.plates_seen[-1]):
@@ -124,7 +114,6 @@ class PlateDetector:
         line_mask = thresh_line.copy()
         line_mask = cv.bitwise_not(line_mask)
         mask2 = cv.inRange(hsv, self.backofcar_lower_hsv, self.backofcar_upper_hsv)
-        # cv.imshow("mask2", mask2)
         mask2 = cv.bitwise_and(mask2, line_mask)
         cv.morphologyEx(mask2, cv.MORPH_OPEN, (5,5), mask2, iterations=2)
         cv.morphologyEx(mask2, cv.MORPH_CLOSE, (5,5), mask2, iterations=2)
@@ -139,7 +128,6 @@ class PlateDetector:
             if cv.contourArea(contours2[i]) < 200:
                 continue
 
-            # cv.drawContours(image, contours2, i, (0,255,0), 3)
             M = cv.moments(contours2[i])
             if M["m00"] != 0:
                 cX = int(M["m10"] / M["m00"])
@@ -162,10 +150,8 @@ class PlateDetector:
                 epsilon = 0.03 * cv.arcLength(c, True)
                 approx = cv.approxPolyDP(c, epsilon, True)
                 hull = cv.convexHull(approx)
-                # cv.drawContours(image, [hull], -1, (255, 255, 0), 3)
                 corners = np.int0(hull)
-                for c in corners:   
-                    # cv.circle(image, (c[0][0], c[0][1]), 5, (0, 0, 255), -1)         
+                for c in corners:         
                     all_corners.append(c)
             
             #sort all corners based on y height
@@ -188,29 +174,20 @@ class PlateDetector:
 
             hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
             result_mask = cv.inRange(hsv_result, self.char_lower_hsv, self.char_upper_hsv)
-            #cv.imshow("result_mask", result_mask)
             cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
             contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
             contours = sorted(contours, key=cv.contourArea, reverse=True)
-
-            # cv.drawContours(result, contours, -1, (0, 255, 0), 3)
 
             total_area = 0
 
             for c in contours:
                 if cv.contourArea(c) > 300:
                     (x, y, w, h) = cv.boundingRect(c)
-                    # cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 255), 2)
                     total_area += w*h
             
             #Look for area in this range, and at least 2 contours
             #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
             if total_area > 6100 and total_area < 7500 and len(contours) >= 2:
-
-                #cv.imshow("result", result)
-                #image_name = f"{self.park_spot}_{LIST_OF_PLATES[self.park_spot-1]}__{time.time()}.jpg"
-                #cv.imwrite(os.path.join(IMAGE_PATH, image_name), result)
-                #cv.waitKey(1)
                 try:
                     chars = self.get_chars_from_image(result)
                     id_im = self.get_ID_from_image(result)
@@ -231,22 +208,6 @@ class PlateDetector:
                         self.license_plate_pub.publish(str(f'Team3,SS,{id},{char0}{char1}{char2}{char3}')) 
                 except Exception as e:
                     print(e)
-            #just for testing
-            # raw_image = cv.resize(raw_image, (0,0), fx=0.05, fy=0.05) #if model uses grayscale
-            # raw_image = np.float16(raw_image/255.)
-            # raw_image = raw_image.reshape((1, 36, 64, 3))
-            # predicted_actions = self.driving_model.predict(raw_image)
-
-
-
-        #cv.imshow("main", image)
-        #cv.waitKey(1)
-    
-    def velocity_callback(self, msg):
-        #press t to increment license plate number 
-        if (msg.linear.z > 0):
-            self.park_spot+=1
-            print("Recording P{}".format(self.park_spot))
 
     def get_chars_from_image(self, result):
         hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
@@ -275,7 +236,6 @@ class PlateDetector:
         hsv_result = cv.cvtColor(result, cv.COLOR_BGR2HSV)
         result_mask = cv.inRange(hsv_result, np.array([0,0,0]), np.array([0,0,70]))
         cv.morphologyEx(result_mask, cv.MORPH_OPEN, (5,5), result_mask, iterations=2)
-        # plt.imshow(result_mask, cmap='gray')
         contours, _ = cv.findContours(result_mask.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=cv.contourArea, reverse=True)
 
@@ -288,7 +248,6 @@ class PlateDetector:
         if (len(bounding_boxes) == 2):
             return cv.resize(cv.cvtColor(result[bounding_boxes[1][1]-10: bounding_boxes[1][1]+70, bounding_boxes[1][0]-20: bounding_boxes[1][0]+130], cv.COLOR_BGR2GRAY),(50,40))
         else:
-            #throw an error
             raise Exception("No ID found")
 
 if __name__ =='__main__':

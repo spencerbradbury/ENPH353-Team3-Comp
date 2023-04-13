@@ -32,7 +32,6 @@ class Controller:
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
-        self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.recording_count = -1
@@ -78,11 +77,8 @@ class Controller:
             camera_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             print(e)
-            
-        self.plate_detection_pub.publish(msg)
+        
         self.state_machine(camera_image)
-        #cv2.imshow("Camera Feed", camera_image)
-        #cv2.waitKey(1)
 
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 2):
@@ -168,8 +164,7 @@ class Controller:
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
         mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
-        #cv2.imshow("mask", mask)
-        #cv2.waitKey(1)
+
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) == 0:
@@ -220,8 +215,6 @@ class Controller:
         gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
         _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
         binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
-        # cv2.imshow("Camera Feed", binary)
-        # cv2.waitKey(1)
         if (np.sum(binary) == 0):
             cmd_vel_msg = Twist()
             cmd_vel_msg.linear.x = 0
