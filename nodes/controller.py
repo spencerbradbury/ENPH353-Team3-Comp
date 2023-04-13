@@ -17,9 +17,10 @@ DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Com
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V19_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V20_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
+DRIVING_MODEL_PATH_3 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V19_2_100_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -55,6 +56,7 @@ class Controller:
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
+        self.driving_model_3 = load_model('{}'.format(DRIVING_MODEL_PATH_3))
     
     def state_machine(self, camera_image):
 
@@ -104,11 +106,12 @@ class Controller:
                 linear_x = 0.45 #0.5
                 angular_z = 4.
             else: 
-                predicted_actions = self.driving_model_2(camera_image)
                 if self.is_inside == True:
+                    predicted_actions = self.driving_model_3(camera_image)
                     linear_x = 0.3
                     angular_z = 2.8
                 else:
+                    predicted_actions = self.driving_model_2(camera_image)
                     linear_x = 0.4 #0.4
                     angular_z = 2.5 #2.5
             action = np.argmax(predicted_actions)
