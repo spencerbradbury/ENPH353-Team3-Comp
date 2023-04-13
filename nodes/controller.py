@@ -4,6 +4,7 @@ from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 import numpy as np
 import os
 import time
@@ -32,6 +33,7 @@ class Controller:
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
+        self.slow_down_sub = rospy.Subscriber("/slow_down", String, self.slow_down_callback)
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.recording_count = -1
@@ -46,6 +48,7 @@ class Controller:
         self.x_frames = 0
         self.time_last_x_walk = 0
         self.truck_passing = 0
+        self.slow = False
         self.is_inside = False
         self.go_like_hell = False
         self.last_frame = np.zeros((1280, 720)) 
@@ -81,6 +84,9 @@ class Controller:
         
         self.state_machine(camera_image)
 
+    def slow_down_callback(self, msg):
+        self.slow = True
+
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 2):
             self.robot_state = 2
@@ -103,15 +109,19 @@ class Controller:
                 if self.is_inside == True: #inner loop driving
                     predicted_actions = self.driving_model_3(camera_image)
                     if self.go_like_hell: #inner fast
-                        linear_x = 0.4 #0.3
+                        linear_x = 0.35 #0.3
                         angular_z = 3. #2.8
                     else:  
                         linear_x = 0.3 #0.3
                         angular_z = 2.2 #2.8
                 else: #grass driving
                     predicted_actions = self.driving_model_2(camera_image)
-                    linear_x = 0.55 #0.5 , 0.6
-                    angular_z = 5. #4 , 4.5
+                    if not self.slow:
+                        linear_x = 0.6 #0.5 , 0.6, 0.55
+                        angular_z = 4.5 #4 , 4.5 , 5.
+                    else: 
+                        linear_x = 0.4 #0.5 , 0.6, 0.55
+                        angular_z = 3. #4 , 4.5 , 5.
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
             if (action == 0): #drive forward
@@ -127,7 +137,7 @@ class Controller:
 
     def innitialize_robot(self):
         cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = .5
+        cmd_vel_msg.linear.x = .45
         cmd_vel_msg.angular.z = 1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
         if(self.innit_frames > 15):
@@ -148,6 +158,9 @@ class Controller:
                 pass
             self.robot_state = 4
         elif(self.is_ped_crossing(camera_image)):
+            current_t = time.time()
+            while time.time() < current_t + 0.2:
+                pass
             self.cross_x_walk()
             
             
