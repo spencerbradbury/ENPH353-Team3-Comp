@@ -4,6 +4,7 @@ from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 import numpy as np
 import os
 import time
@@ -13,13 +14,14 @@ from std_msgs.msg import String
 #from tensorflow.keras.optimizers.experimental import WeightDecay
 
 IMITATION_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/x-walks/'
-DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V14_1_80_01_smaller.h5'
+DRIVING_MODEL_PATH_1 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V17_1_80_01_smaller.h5'
 INPUT1 = [36, 64]
 F1 = 0.05
 MASKING_PATH = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/media/masking/'
-DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V17_2_100_01_smaller.h5'
+DRIVING_MODEL_PATH_2 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V25_2_100_01_smaller.h5'
 INPUT2 = [36, 64]
 F2 = 0.05
+DRIVING_MODEL_PATH_3 = '/home/fizzer/ros_ws/src/controller_pkg/ENPH353-Team3-Comp/NNs/Imitation_model_V19_2_100_01_smaller.h5'
 ##
 # Class that will contain functions to control the robot
 class Controller:
@@ -27,16 +29,12 @@ class Controller:
 
         self.bridge = CvBridge()
 
-
-        #Initialize time, used to stop clock in time trial
-        self.start_time = time.time()
-
         #define ros nodes
         self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.image_callback)
         self.cmd_vel_pub = rospy.Publisher("/R1/cmd_vel", Twist, queue_size = 10)
         #self.cmd_vel_sub = rospy.Subscriber("/R1/cmd_vel", Twist, self.velocity_callback)
         self.license_plate_pub = rospy.Publisher("/license_plate", String, queue_size = 10)
-        self.plate_detection_pub = rospy.Publisher("/plate_detection", Image, queue_size = 1)
+        self.slow_down_sub = rospy.Subscriber("/slow_down", String, self.slow_down_callback)
         #set initial fields for robot velocity, 
         self.isrecording = False 
         self.recording_count = -1
@@ -51,18 +49,22 @@ class Controller:
         self.x_frames = 0
         self.time_last_x_walk = 0
         self.truck_passing = 0
+        self.slow = False
         self.is_inside = False
+        self.go_like_hell = False
         self.last_frame = np.zeros((1280, 720)) 
         self.autopilot = False
         self.driving_model_1 = load_model('{}'.format(DRIVING_MODEL_PATH_1))
         self.driving_model_2 = load_model('{}'.format(DRIVING_MODEL_PATH_2))
+        self.driving_model_3 = load_model('{}'.format(DRIVING_MODEL_PATH_3))
+        self.license_plate_pub.publish(str("Team3,SS,0,GOGO"))
     
     def state_machine(self, camera_image):
 
         # innitialize
         if (self.robot_state == 0):
             self.innitialize_robot()
-        #autopilot 1
+        #autopilot 1,2,3
         if (self.robot_state == 1 or self.robot_state == 4):
             self.drive_with_autopilot(camera_image)
         #x-walk stop
@@ -80,11 +82,11 @@ class Controller:
             camera_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
             print(e)
-            
-        self.plate_detection_pub.publish(msg)
+        
         self.state_machine(camera_image)
-        #cv2.imshow("Camera Feed", camera_image)
-        #cv2.waitKey(1)
+
+    def slow_down_callback(self, msg):
+        self.slow = True
 
     def drive_with_autopilot(self, camera_image):
         if (self.is_x_walk_in_front(camera_image) and (time.time() - self.time_last_x_walk) > 2):
@@ -100,18 +102,27 @@ class Controller:
                 camera_image = cv2.resize(camera_image, (0,0), fx=F2, fy=F2) 
                 camera_image = np.float16(camera_image/255.)
                 camera_image = camera_image.reshape((1, INPUT2[0], INPUT2[1], 3))   
-            if self.robot_state == 1:
+            if self.robot_state == 1: #road driving
                 predicted_actions = self.driving_model_1(camera_image)
-                linear_x = 0.5 #0.3
-                angular_z = 2.8
+                linear_x = 0.7 #0.5 , 0.6
+                angular_z = 5.5 #4.5 , 5
             else: 
-                predicted_actions = self.driving_model_2(camera_image)
-                if self.is_inside == True:
-                    linear_x = 0.3
-                    angular_z = 2.8
-                else:
-                    linear_x = 0.4 #0.3
-                    angular_z = 2.5 #2.5
+                if self.is_inside == True: #inner loop driving
+                    predicted_actions = self.driving_model_3(camera_image)
+                    if self.go_like_hell: #inner fast
+                        linear_x = 0.35 #0.3
+                        angular_z = 3. #2.8
+                    else:  
+                        linear_x = 0.3 #0.3
+                        angular_z = 2.2 #2.8
+                else: #grass driving
+                    predicted_actions = self.driving_model_2(camera_image)
+                    if not self.slow:
+                        linear_x = 0.6 #0.5 , 0.6, 0.55
+                        angular_z = 4.5 #4 , 4.5 , 5.
+                    else: 
+                        linear_x = 0.4 #0.5 , 0.6, 0.55
+                        angular_z = 3. #4 , 4.5 , 5.
             action = np.argmax(predicted_actions)
             cmd_vel_msg = Twist()
             if (action == 0): #drive forward
@@ -127,7 +138,7 @@ class Controller:
 
     def innitialize_robot(self):
         cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = .3
+        cmd_vel_msg.linear.x = .45
         cmd_vel_msg.angular.z = 1.
         self.cmd_vel_pub.publish(cmd_vel_msg)
         if(self.innit_frames > 15):
@@ -142,13 +153,28 @@ class Controller:
         self.robot_state = 3 #change to wait for ped in the future
 
     def wait_for_ped(self, camera_image):
-        if(self.is_ped_crossing(camera_image)):
+        if (self.num_x_walks > 2):
+            current_t = time.time()
+            while time.time() < current_t + 1:
+                pass
+            self.robot_state = 4
+        elif(self.is_ped_crossing(camera_image)):
+            current_t = time.time()
+            while time.time() < current_t + 0.2:
+                pass
             self.cross_x_walk()
             
             
     def cross_x_walk(self):
         if self.num_x_walks >= 2:
             self.robot_state = 4
+            cmd_vel_msg = Twist()
+            cmd_vel_msg.linear.x = 0.4
+            cmd_vel_msg.angular.z = 0.
+            self.cmd_vel_pub.publish(cmd_vel_msg)
+            current_t = time.time()+0.5
+            while time.time() < current_t:
+                pass
         else: self.robot_state = 1
         self.time_last_x_walk = time.time()
         
@@ -162,28 +188,30 @@ class Controller:
 
         _, mask = cv2.threshold(mask, threshold, max_value, cv2.THRESH_BINARY)
         mask = cv2.GaussianBlur(mask,(5,5),cv2.BORDER_DEFAULT)
-        #cv2.imshow("mask", mask)
-        #cv2.waitKey(1)
+
         # Find the contours of the white shapes in the binary image
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) == 0:
             return False
         # Find the largest contour
         #largest_contour = max(contours, key=cv2.contourArea)
-        bottom = int(camera_image.shape[0] / 9)
+        bottom = int(camera_image.shape[0] / 5) #/9
         for contour in contours:
             moments = cv2.moments(contour)
             centroid_y = int(moments["m01"] / moments["m00"])
             if (centroid_y > camera_image.shape[0] - bottom):
-                self.num_x_walks+=1
                 return True
         return False 
         
     def is_ped_crossing(self, camera_image):
         height, width = camera_image.shape[:2]
         # Set the number of pixels to cut from each side
-        num_pixels_v = 500
-        num_pixels_h = 300
+        if (self.num_x_walks > 1):
+            num_pixels_v = 100
+            num_pixels_h = 300
+        else:
+            num_pixels_v = 500
+            num_pixels_h = 300
 
         # Cut the image by removing the specified number of pixels from each side
         image = camera_image[0:height-num_pixels_h, num_pixels_v:width-num_pixels_v]
@@ -200,29 +228,37 @@ class Controller:
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if (len(contours) >= 2):
+            self.num_x_walks+=1
             return True
         return False
 
     def has_entered_inner_loop(self, camera_image):
         threshold = 90
         height, width = camera_image.shape[:2]
-        num_pixels_top = 450
-        num_pixels_bot = 220
-        num_pixels_l = 500
-        num_pixels_r = 150
+        num_pixels_top = 450 #450
+        num_pixels_bot = 220 #220
+        num_pixels_l = 500 #500
+        num_pixels_r = 150 #150
         gray = cv2.cvtColor(camera_image, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray,(5,5),cv2.BORDER_DEFAULT)
         _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
         binary = binary[num_pixels_top:height-num_pixels_bot, num_pixels_l:width-num_pixels_r]
-        # cv2.imshow("Camera Feed", binary)
-        # cv2.waitKey(1)
         if (np.sum(binary) == 0):
+            # cmd_vel_msg = Twist()
+            # cmd_vel_msg.linear.x = 0
+            # cmd_vel_msg.angular.z = 1.
+            # self.cmd_vel_pub.publish(cmd_vel_msg)
+            # current_t = time.time()+0.2
+            # while time.time() < current_t:
+            #     pass
             cmd_vel_msg = Twist()
             cmd_vel_msg.linear.x = 0
             cmd_vel_msg.angular.z = 0
             self.cmd_vel_pub.publish(cmd_vel_msg)
             self.last_frame = camera_image
             self.is_inside = True
+
+        
             return True
         else: return False
     
@@ -235,11 +271,13 @@ class Controller:
             if(self.truck_passing > 4):
                 self.robot_state = 4
                 if difference >= 10_000:
-                    increment = 2
+                    increment = 2.5
                     curent_time = time.time()
                     end_time = curent_time + increment
                     while(curent_time < end_time):
                         curent_time = time.time()
+                else:
+                    self.go_like_hell = True
             self.truck_passing+=1
         self.last_frame = camera_image
     
