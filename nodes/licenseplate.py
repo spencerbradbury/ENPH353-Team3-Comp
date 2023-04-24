@@ -192,7 +192,7 @@ class PlateDetector:
             
             #Look for area in this range, and at least 2 contours
             #6500 and 7000 worked very well, but somtimes missed a car. this never missed, but sometimes got a false positivegti
-            if total_area > 6100 and total_area < 7500 and len(contours) >= 2:
+            if total_area > 6050 and total_area < 7550 and len(contours) >= 2:
                 try:
                     self.previous_plate_time = rospy.get_time()
                     chars = self.get_chars_from_image(result)
